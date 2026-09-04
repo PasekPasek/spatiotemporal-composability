@@ -37,123 +37,189 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 
 <style>
   :root{
-    --bg:#E7EBEE; --paper:#FFF; --sunk:#F4F7F9;
-    --ink:#12212E; --muted:#647585; --line:#C9D4DC;
-    --active:#0E7C66; --pending:#B26A00; --inverse:#5B4BC4; --idle:#93A3AF;
-    --control:#234E8C; --r:3px;
+    /* plate & wells */
+    --plate:#1A2028; --well:#141A21; --riser:#222B35; --sunk:#1D242C;
+    --etch:#2C3743; --etch-lit:#3D4B5A;
+    /* ink */
+    --ink:#DDE3E9; --ink-dim:#8C99A6;
+    /* instrumentation: warm = energised, cold = stored */
+    --live:#F0A94C; --stored:#7FA7C4; --warn:#C98A44;
+    --idle-line:#3A4552; --idle-ink:#93A0AD;
+    /* syntax */
+    --c-key:#C79BDF; --c-str:#83C79A; --c-com:#697887; --c-fn:#8FB8E8; --c-typ:#DFAF72;
+    --r:2px;
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-    font-size:17px;line-height:1.6}
+  body{margin:0;background:var(--plate);color:var(--ink);
+    font-family:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+    font-size:17px;line-height:1.68;
+    -webkit-font-smoothing:antialiased}
   .wrap{max-width:780px;margin:0 auto;padding:0 20px 96px}
-  a{color:var(--control)}
+  a{color:var(--live);text-decoration:none;border-bottom:1px solid rgba(240,169,76,.35)}
+  a:hover{border-bottom-color:var(--live)}
 
-  h1{font-size:clamp(33px,7vw,52px);line-height:1.05;font-weight:600;
-     letter-spacing:-.025em;margin:0 0 18px;max-width:15ch}
-  h2{font-size:clamp(21px,4.4vw,27px);line-height:1.2;font-weight:600;
-     letter-spacing:-.015em;margin:0}
-  h3{font-size:17px;font-weight:600;margin:30px 0 8px}
-  h4{font-size:12.5px;font-weight:600;margin:0 0 10px;color:var(--muted)}
+  h1{font-size:clamp(34px,7vw,54px);line-height:1.02;font-weight:600;
+     letter-spacing:-.02em;margin:0 0 20px;max-width:15ch}
+  h2{font-size:clamp(22px,4.4vw,28px);line-height:1.2;font-weight:600;
+     letter-spacing:-.01em;margin:0}
+  h3{font-size:18px;font-weight:600;margin:32px 0 8px}
+  h4{font-family:"IBM Plex Mono",ui-monospace,monospace;
+     font-size:11px;font-weight:500;letter-spacing:.06em;
+     margin:0 0 10px;color:var(--ink-dim)}
   p{margin:0 0 16px;max-width:66ch}
-  .lead{font-size:19px;line-height:1.55}
-  .muted{color:var(--muted)}
-  small{font-size:13.5px;line-height:1.55;color:var(--muted);display:block;max-width:66ch}
+  .lead{font-size:19.5px;line-height:1.6}
+  .muted{color:var(--ink-dim)}
+  small{font-size:13.5px;line-height:1.6;color:var(--ink-dim);display:block;max-width:66ch}
   code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace}
-  p code,li code{font-size:.88em;background:#DDE4E9;padding:1px 4px;border-radius:var(--r)}
+  p code,li code,small code{font-size:.86em;background:var(--riser);color:var(--ink);
+    padding:1px 5px;border-radius:var(--r);border:1px solid var(--etch)}
+  strong{font-weight:600;color:#F1F5F8}
+  em{font-style:italic}
 
-  header{padding:74px 0 40px}
-  .kicker{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted);margin:0 0 20px}
-  section{padding-top:52px;border-top:1px solid var(--line);margin-top:52px}
-  .sec-head{display:flex;gap:14px;align-items:baseline;margin-bottom:22px}
-  .sec-num{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted);padding-top:4px;flex:none}
+  /* ---- hero: the blueprint on the bench ---- */
+  header{padding:78px 0 6px}
+  .bench{display:flex;gap:36px;align-items:center;margin-top:38px;flex-wrap:wrap}
+  .bench .toc{margin:0;flex:0 0 auto}
+  .bp{flex:1 1 300px;min-width:260px;max-width:460px;margin-right:-40px;
+      pointer-events:none;opacity:.6}
+  @media (max-width:640px){.bp{display:none}}
+  .bp path,.bp rect,.bp circle{fill:none;stroke:var(--etch-lit);stroke-width:1;
+      vector-effect:non-scaling-stroke}
+  .bp .fill{fill:var(--plate)}
+  .kicker{font-family:"IBM Plex Mono",monospace;font-size:12.5px;letter-spacing:.02em;
+    color:var(--ink-dim);margin:0 0 22px}
+
+  /* ---- datum rules between sections ---- */
+  section{padding-top:56px;border-top:1px solid var(--etch);margin-top:56px}
+  .sec-head{display:flex;gap:16px;align-items:baseline;margin-bottom:24px}
+  .sec-num{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--live);
+    padding-top:5px;flex:none;letter-spacing:.04em;opacity:.8}
   ul.plain{margin:0 0 16px;padding-left:20px;max-width:66ch}
-  ul.plain li{margin-bottom:7px}
+  ul.plain li{margin-bottom:9px}
 
-  pre{background:var(--paper);border:1px solid var(--line);border-left:2px solid var(--control);
+  pre{background:var(--riser);border:1px solid var(--etch);
+      border-left:2px solid var(--etch-lit);
       border-radius:var(--r);padding:16px 18px;overflow-x:auto;font-size:13.5px;
-      line-height:1.65;margin:18px 0}
-  .c-key{color:#8250DF}.c-str{color:#0A6E4E}.c-com{color:#8B9AA6;font-style:italic}
-  .c-fn{color:#234E8C}.c-typ{color:#B26A00}
+      line-height:1.7;margin:20px 0;color:var(--ink)}
+  .c-key{color:var(--c-key)}.c-str{color:var(--c-str)}
+  .c-com{color:var(--c-com);font-style:italic}
+  .c-fn{color:var(--c-fn)}.c-typ{color:var(--c-typ)}
 
-  .demo{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);
-        padding:18px;margin:22px 0}
-  .pane{background:var(--sunk);border:1px solid var(--line);border-radius:var(--r);padding:12px}
+  /* ---- instruments: recessed wells machined into the plate ---- */
+  .demo{position:relative;background:var(--well);
+    border:1px solid var(--etch);border-radius:var(--r);
+    padding:20px;margin:26px 0;
+    box-shadow:inset 0 1px 0 rgba(0,0,0,.5), inset 0 0 40px rgba(0,0,0,.35);
+    background-image:linear-gradient(rgba(148,178,208,.045) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(148,178,208,.045) 1px,transparent 1px);
+    background-size:32px 32px;
+    background-position:-1px -1px}
+  .demo::before,.demo::after{content:"";position:absolute;width:11px;height:11px;
+    border-color:var(--etch-lit);border-style:solid}
+  .demo::before{top:-1px;left:-1px;border-width:1px 0 0 1px}
+  .demo::after{bottom:-1px;right:-1px;border-width:0 1px 1px 0}
+  .pane{background:#191F26;border:1px solid var(--etch);
+    border-radius:var(--r);padding:13px;
+    box-shadow:inset 0 1px 0 rgba(0,0,0,.4)}
   .panes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media (max-width:600px){.panes{grid-template-columns:1fr}}
 
   .rows{list-style:none;margin:0;padding:0;font-family:"IBM Plex Mono",monospace;font-size:12.5px}
-  .rows li{padding:6px 8px;background:var(--paper);border:1px solid var(--line);
+  .rows li{padding:7px 9px;background:var(--riser);border:1px solid var(--etch);
     border-radius:var(--r);margin-bottom:6px;animation:pop .28s ease both;
     display:flex;justify-content:space-between;gap:8px;align-items:baseline}
-  .rows li.inv{border-left:2px solid var(--inverse)}
-  .rows li.fx{border-left:2px solid var(--active)}
-  .rows li.pend{border-left:2px solid var(--pending)}
+  .rows li.inv{border-left:2px solid var(--stored);color:#CBDCE8}
+  .rows li.fx{border-left:2px solid var(--live);color:#F0E2CE}
+  .rows li.pend{border-left:2px solid var(--warn)}
   .rows li.leaving{animation:leave .3s ease both}
-  .rows li.flash{background:#EFEBFF}
-  .rows li .who{color:var(--muted);font-size:11px;flex:none}
-  .empty{font-size:12.5px;color:var(--idle);font-family:"IBM Plex Mono",monospace;padding:6px 2px}
+  .rows li.flash{background:#2A3440;border-color:var(--stored)}
+  .rows li .who{color:var(--ink-dim);font-size:11px;flex:none}
+  .empty{font-size:12.5px;color:var(--idle-ink);opacity:.65;
+    font-family:"IBM Plex Mono",monospace;padding:7px 3px}
   @keyframes pop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
   @keyframes leave{from{opacity:1}to{opacity:0;transform:translateX(16px)}}
 
-  .controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
-  button{font-family:inherit;font-size:14px;font-weight:500;background:var(--control);
-    color:#fff;border:1px solid var(--control);padding:8px 13px;border-radius:var(--r);cursor:pointer}
-  button.ghost{background:transparent;color:var(--control)}
-  button.mini{font-size:12.5px;padding:5px 10px}
-  button:disabled{opacity:.36;cursor:not-allowed}
-  button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-  .hint{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--muted);
-    margin:12px 0 0;min-height:2.4em;max-width:none}
+  /* ---- machined controls ---- */
+  .controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  button{font-family:"IBM Plex Mono",monospace;font-size:12.5px;font-weight:500;
+    letter-spacing:.01em;
+    background:linear-gradient(var(--riser),#1C242C);
+    color:var(--ink);border:1px solid var(--etch-lit);
+    padding:9px 14px;border-radius:var(--r);cursor:pointer;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+    transition:border-color .16s ease,color .16s ease,background .16s ease}
+  button:hover:not(:disabled){border-color:var(--live);color:var(--live)}
+  button.ghost{background:transparent;color:var(--ink-dim);border-color:var(--etch)}
+  button.ghost:hover:not(:disabled){color:var(--live);border-color:var(--etch-lit)}
+  button.mini{font-size:11.5px;padding:6px 11px}
+  button:disabled{opacity:.3;cursor:not-allowed}
+  button:focus-visible{outline:2px solid var(--live);outline-offset:2px}
+  .hint{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink-dim);
+    margin:14px 0 0;min-height:2.4em;max-width:none}
 
-  .badge{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;
-    padding:2px 7px;border-radius:20px;border:1px solid currentColor;white-space:nowrap}
-  .s-active{color:var(--active)}.s-pending{color:var(--pending)}
-  .s-idle{color:var(--idle)}.s-unload{color:var(--inverse)}
+  .badge{font-family:"IBM Plex Mono",monospace;font-size:10.5px;font-weight:500;
+    letter-spacing:.03em;
+    padding:3px 8px;border-radius:20px;border:1px solid currentColor;white-space:nowrap}
+  .s-active{color:var(--live)}.s-pending{color:var(--warn)}
+  .s-idle{color:var(--idle-ink)}.s-unload{color:var(--stored)}
 
-  /* sandbox */
+  /* ---- sandbox ---- */
   .sandbox{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media (max-width:680px){.sandbox{grid-template-columns:1fr}}
-  .fiber{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);
-    padding:10px 12px;margin-bottom:8px;transition:border-color .3s ease,background .3s ease}
-  .fiber.on{border-color:var(--active);background:#F3F9F7}
-  .fiber.wait{border-color:var(--pending);background:#FCF7EF}
-  .fiber.gone{border-color:var(--inverse);background:#F7F4FF}
+  .fiber{background:var(--riser);border:1px solid var(--etch);border-radius:var(--r);
+    padding:11px 13px;margin-bottom:8px;
+    transition:border-color .3s ease,background .3s ease,box-shadow .3s ease}
+  .fiber.on{border-color:rgba(240,169,76,.55);background:#241F17;
+    box-shadow:0 0 0 1px rgba(240,169,76,.09), 0 0 18px -6px rgba(240,169,76,.4)}
+  .fiber.wait{border-color:rgba(201,138,68,.45);background:#22201A}
+  .fiber.gone{border-color:rgba(127,167,196,.45);background:#1B2229}
   .fiber .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
   .fiber .nm{font-family:"IBM Plex Mono",monospace;font-size:13.5px;font-weight:500}
-  .fiber .meta{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);margin-top:5px}
-  .fiber .act{margin-top:9px}
+  .fiber .meta{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-dim);margin-top:6px}
+  .fiber .act{margin-top:10px}
 
-  .log{list-style:none;margin:14px 0 0;padding:0;font-family:"IBM Plex Mono",monospace;
-    font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+  .log{list-style:none;margin:16px 0 0;padding:12px 0 0;
+    font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink-dim);
+    border-top:1px solid var(--etch)}
   .log li{padding:2px 0;animation:pop .25s ease both}
-  .log li b{color:var(--ink);font-weight:600}
+  .log li b{color:var(--live);font-weight:500}
 
+  /* ---- schematic ---- */
   .fsm{width:100%;height:auto;display:block}
   .fsm text{font-family:"IBM Plex Mono",monospace;font-size:12px;fill:var(--ink)}
-  .fsm .box{fill:var(--sunk);stroke:var(--line);transition:fill .3s ease,stroke .3s ease}
-  .fsm .box.hot{fill:#EAF1FA;stroke:var(--control);stroke-width:2}
-  .fsm .edge{stroke:var(--line);fill:none;marker-end:url(#ah)}
-  .fsm .edge.hot{stroke:var(--control);stroke-width:2;marker-end:url(#ahh)}
+  .fsm .lbl{fill:var(--ink-dim);font-size:11.5px}
+  .fsm .box{fill:var(--sunk);stroke:var(--etch-lit);
+    transition:fill .3s ease,stroke .3s ease,filter .3s ease}
+  .fsm .box.hot{fill:#2B2114;stroke:var(--live);stroke-width:2;
+    filter:drop-shadow(0 0 7px rgba(240,169,76,.45))}
+  .fsm .edge{stroke:var(--idle-line);fill:none;marker-end:url(#ah);transition:stroke .3s ease}
+  .fsm .edge.hot{stroke:var(--live);stroke-width:2;marker-end:url(#ahh)}
 
-  .verdict{margin-top:14px;padding:11px 13px;border-radius:var(--r);background:#F3F9F7;
-    border:1px solid var(--active);color:var(--active);
+  .verdict{margin-top:16px;padding:12px 14px;border-radius:var(--r);
+    background:#20261F;border:1px solid rgba(240,169,76,.5);color:var(--live);
     font-family:"IBM Plex Mono",monospace;font-size:13px}
   .verdict[hidden]{display:none}
 
-  .toc{font-family:"IBM Plex Mono",monospace;font-size:13px;line-height:2;
-    margin:32px 0 0;padding:0;list-style:none}
-  .toc a{text-decoration:none;border-bottom:1px solid var(--line)}
-  .toc a:hover{border-color:var(--control)}
+  .toc{font-family:"IBM Plex Mono",monospace;font-size:13px;line-height:2.1;
+    margin:36px 0 0;padding:0;list-style:none}
+  .toc a{color:var(--ink);border-bottom:1px solid var(--etch)}
+  .toc a:hover{color:var(--live);border-color:var(--live)}
 
-  footer{border-top:1px solid var(--line);margin-top:56px;padding-top:28px;
-    font-size:14px;color:var(--muted)}
+  footer{border-top:1px solid var(--etch);margin-top:60px;padding-top:30px;
+    font-size:14px;color:var(--ink-dim)}
 
+  /* one orchestrated entrance: the blueprint draws itself, once */
+  @media (prefers-reduced-motion:no-preference){
+    .bp path,.bp rect,.bp circle{
+      stroke-dasharray:var(--len,600);stroke-dashoffset:var(--len,600);
+      animation:draw 1.25s cubic-bezier(.6,.05,.25,1) forwards}
+  }
+  @keyframes draw{to{stroke-dashoffset:0}}
   @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
 </style>
 </head>
@@ -161,10 +227,11 @@
 <div class="wrap">
 
 <header>
-  <p class="kicker">A walkthrough of arXiv:2608.25512 · Shi, Zhang &amp; Cui, 2026</p>
+  <p class="kicker">A walkthrough of arXiv:2608.25512 (Shi, Zhang and Cui, 2026)</p>
   <h1>Spatiotemporal composability</h1>
   <p class="lead">You disable a plugin in your editor and it asks you to restart. Not because the code is still loaded, but because nobody knows what that plugin changed. This is a runtime that knows — and this page lets you operate it.</p>
   <p class="muted">Four sandboxes, each isolating one mechanism. Everything is live: install components, watch the inverse stack unwind, break a dependency mid-activation and see what the runtime does about it.</p>
+  <div class="bench">
   <ul class="toc">
     <li><a href="#axes">01 &nbsp; Two orthogonal axes</a></li>
     <li><a href="#sandbox">02 &nbsp; The runtime, hands on</a></li>
@@ -173,6 +240,22 @@
     <li><a href="#guarantees">05 &nbsp; What you get in return</a></li>
     <li><a href="#practice">06 &nbsp; Why a TypeScript developer should care</a></li>
   </ul>
+  <svg class="bp" viewBox="0 0 600 272" aria-hidden="true" focusable="false">
+    <circle class="fill" cx="30" cy="133" r="13" style="--len:82;animation-delay:.05s"/>
+    <rect class="fill" x="68"  y="111" width="96"  height="44" style="--len:280;animation-delay:.12s"/>
+    <rect class="fill" x="248" y="40"  width="116" height="44" style="--len:320;animation-delay:.30s"/>
+    <rect class="fill" x="446" y="111" width="92"  height="44" style="--len:272;animation-delay:.52s"/>
+    <rect class="fill" x="248" y="188" width="116" height="44" style="--len:320;animation-delay:.66s"/>
+    <path d="M166,114 L244,84"  style="--len:84;animation-delay:.24s"/>
+    <path d="M280,40 C278,14 334,14 332,38" style="--len:78;animation-delay:.42s"/>
+    <path d="M368,84 L446,114" style="--len:84;animation-delay:.46s"/>
+    <path d="M306,86 L306,186" style="--len:100;animation-delay:.58s"/>
+    <path d="M448,152 L368,188" style="--len:88;animation-delay:.62s"/>
+    <path d="M244,188 L166,152" style="--len:86;animation-delay:.74s"/>
+    <path d="M46,124 L64,124"  style="--len:18;animation-delay:.08s"/>
+    <path d="M66,142 L48,142"  style="--len:18;animation-delay:.10s"/>
+  </svg>
+  </div>
 </header>
 
 <section id="axes">
@@ -330,9 +413,9 @@
     <svg class="fsm" viewBox="0 0 600 272" role="img" aria-label="The component lifecycle: nine rules over four states plus an empty node for a fiber absent from the registry">
       <defs>
         <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M0,0 L10,5 L0,10 z" fill="#C9D4DC"/></marker>
+          <path d="M0,0 L10,5 L0,10 z" fill="#3A4552"/></marker>
         <marker id="ahh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M0,0 L10,5 L0,10 z" fill="#234E8C"/></marker>
+          <path d="M0,0 L10,5 L0,10 z" fill="#F0A94C"/></marker>
       </defs>
 
       <path class="edge" id="e-insert" d="M46,124 L64,124"/>
@@ -355,14 +438,14 @@
       <text x="492" y="138" text-anchor="middle">Active</text>
       <text x="306" y="215" text-anchor="middle">Unloading</text>
 
-      <text x="58"  y="106" text-anchor="middle" fill="#647585">O-Insert</text>
-      <text x="58"  y="166" text-anchor="middle" fill="#647585">O-Remove</text>
-      <text x="196" y="92"  text-anchor="middle" fill="#647585">L-Begin</text>
-      <text x="306" y="14"  text-anchor="middle" fill="#647585">L-Iter</text>
-      <text x="418" y="92"  text-anchor="middle" fill="#647585">L-Finish</text>
-      <text x="420" y="184" text-anchor="middle" fill="#647585">L-Leave</text>
-      <text x="192" y="184" text-anchor="middle" fill="#647585">L-Unload</text>
-      <text x="314" y="140" text-anchor="start"  fill="#647585">L-Divert</text>
+      <text x="58"  y="106" text-anchor="middle" class="lbl">O-Insert</text>
+      <text x="58"  y="166" text-anchor="middle" class="lbl">O-Remove</text>
+      <text x="196" y="92"  text-anchor="middle" class="lbl">L-Begin</text>
+      <text x="306" y="14"  text-anchor="middle" class="lbl">L-Iter</text>
+      <text x="418" y="92"  text-anchor="middle" class="lbl">L-Finish</text>
+      <text x="420" y="184" text-anchor="middle" class="lbl">L-Leave</text>
+      <text x="192" y="184" text-anchor="middle" class="lbl">L-Unload</text>
+      <text x="314" y="140" text-anchor="start"  class="lbl">L-Divert</text>
     </svg>
     <small style="margin-top:10px">The ninth rule, <code>O-Retire</code>, only raises the retirement flag and applies at every state, so it would be a self-loop at all four nodes; the paper's figure omits it and so does this one.</small>
     <div class="controls">

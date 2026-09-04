@@ -20,6 +20,16 @@ It's one file with no build step.
 python3 -m http.server 8000   # then open http://localhost:8000
 ```
 
+## Look
+
+The page is styled as a workshop plate: prose sits on an anodised graphite ground, and each
+sandbox is a recessed, machined well with a faint drafting grid. Colour carries meaning rather
+than decoration — tungsten amber for whatever is energised (Σ, active fibers, the live edge of
+the schematic), cold steel for stored potential (φ, the inverse stack waiting to be discharged).
+IBM Plex Serif for prose, IBM Plex Mono for every readout. One piece of non-user-triggered
+motion: the blueprint in the header draws itself once on load, and respects
+`prefers-reduced-motion`.
+
 ## Accuracy
 
 The page was checked line by line against the paper (arXiv PDF, 85 pp.). Where an earlier draft
