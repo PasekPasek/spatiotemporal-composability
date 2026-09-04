@@ -1,0 +1,32 @@
+# Spatiotemporal Composability, Explained Interactively
+
+> An interactive, single-page explainer for revertible effects and reactive coeffects — the two
+> mechanisms that let a runtime load, reload and remove components without restarting the process.
+> Written as a walkthrough of arXiv:2608.25512 (Shi, Zhang & Cui, cs.PL, August 2026), with a live
+> sandbox and TypeScript examples. Author: Paweł Pasek.
+
+Key definitions used on this page:
+
+- **Temporal composability** — a component's side effects can be completely reverted when it is removed.
+- **Spatial composability** — components declare inter-component dependencies, and the runtime manages them reactively.
+- **Revertible effect** — every context transformation carries an inverse, which the runtime accumulates. `track(f, g)(γ, φ) = (f(γ), φ ∘ g)`; `recover(γ, φ) = (φ(γ), id)`, unwinding inverses in reverse order.
+- **Context paradigm** — the paper's unification of the effect context and the coeffect context into a single context type, through which every effect and coeffect is mediated; the source of the observational equivalence up to which components interleave.
+- **Reactive coeffect** — a declared requirement on the environment; every context change is classified against it and drives activation or deactivation of the component.
+- **Fiber** — the runtime instance of a component: its dependencies, its provisions, and its effect iterator. Nine rules over four states — Inactive, Reloading, Active, Unloading — plus an empty node for a fiber absent from the registry. O-Insert registers it as Inactive; L-Begin starts activation; L-Iter, L-Finish complete it; L-Leave and L-Unload take it down; O-Retire flags it and O-Remove drops it.
+- **L-Divert** — the safety rule that diverts a fiber straight to unloading if a dependency changes mid-activation, rather than finishing against a stale environment.
+- **Recovery exactness** — removing a component restores the context to a state observationally equivalent to the one before it was added.
+- **Confluence** — at quiescence the state is the one a static assembly would have produced: the dynamic history leaves no trace. The theorem holds the orchestration steps fixed and assumes every component total on its provision.
+
+## Page
+
+- [Spatiotemporal Composability, Explained Interactively](https://pasekpasek.github.io/spatiotemporal-composability/): the full explainer — two axes, a runtime sandbox, track/recover, the fiber lifecycle, and what the guarantees buy you.
+- [Extended plain-text version](https://pasekpasek.github.io/spatiotemporal-composability/llms-full.txt): the same content without the interactive sandboxes, for direct ingestion.
+
+## Source material
+
+- [A Programming Paradigm for Spatiotemporal Composability](https://arxiv.org/abs/2608.25512): the paper this page explains. Yifan Shi, Wei Zhang, Tianyi Cui.
+- [Cordis](https://github.com/cordiverse): the TypeScript reference implementation, providing `ctx.effect` for revertible effects, `ctx.set` for coeffect provision and `ctx.use` for instantiation. The paper describes v4; Koishi currently ships on v3.
+
+## Optional
+
+- [Source repository](https://github.com/PasekPasek/spatiotemporal-composability): one HTML file, no build step, MIT.

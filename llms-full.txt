@@ -1,0 +1,185 @@
+# Spatiotemporal Composability, Explained Interactively
+
+Source: https://pasekpasek.github.io/spatiotemporal-composability/
+Author: Paweł Pasek
+Explains: A Programming Paradigm for Spatiotemporal Composability — Yifan Shi, Wei Zhang, Tianyi Cui, arXiv:2608.25512 [cs.PL], August 2026
+Reference implementation: Cordis (TypeScript), https://github.com/cordiverse
+
+You disable a plugin in your editor and it asks you to restart. Not because the code is still
+loaded, but because nobody knows what that plugin changed. This is a runtime that knows.
+
+## 1. Two orthogonal axes
+
+Time: removing a component has to undo everything it did. The mechanism is revertible effects —
+every transformation of the context carries its own inverse, and the runtime holds onto it.
+
+Space: a component declares what it needs from its environment, and the runtime manages that
+reactively. The mechanism is reactive coeffects — every change to the context is classified against
+a component's declaration and drives its activation or deactivation.
+
+An effect is what a component does to its environment. A coeffect is what it requires from it — the
+dual notion, familiar from static analysis, lifted here into a runtime mechanism. Ordinary plugin
+code has neither property: the author has to remember the inverse of every line, and in practice
+leaves behind a leaked listener, a zombie timer, a dead registry entry.
+
+## 2. The runtime
+
+Components declare `inject` (what they require) and `provide` (what they contribute to the shared
+service table). Removing a provider cascades through its dependents, deepest dependent first —
+nobody writes that teardown order; it falls out of dependency resolution. The inverse stack empties
+exactly as far as it filled: no entry survives its owner.
+
+    export const name = 'auth'
+    export const inject = ['db'] as const
+
+    export function apply(ctx: Context<{ db: Database }>) {
+      // ctx.db is non-null for the entire lifetime of this fiber:
+      // if db goes away, the fiber is torn down before it can observe undefined
+      ctx.set('auth', new Auth(ctx.db))
+    }
+
+This is what classical dependency injection does not do. A container injects once, at construction.
+Here the binding is live, it can be withdrawn, and withdrawal is handled as carefully as provision.
+
+## 3. Revertible effects: track and recover
+
+An ordinary context Γ is lifted to a revertible one, ∂Γ = Γ × (Γ → Γ): the current state γ together
+with φ, the composition of the inverses of every effect applied so far.
+
+    track(f, g)(γ, φ) = (f(γ), φ ∘ g)
+    recover(γ, φ)     = (φ(γ), id)
+
+Order is the whole game — inverses come off in reverse, like a stack. In Cordis this collapses into
+a single call; the effect returns its own inverse and the runtime keeps it:
+
+    export function apply(ctx: Context) {
+      ctx.effect(() => {
+        const timer = setInterval(poll, 1000)
+        return () => clearInterval(timer)
+      })
+      ctx.on('message', onMessage)        // context APIs are tracked already
+      ctx.set('db', new Database())
+    }
+
+The entire temporal mechanism, stripped of ergonomics, is a stack of functions:
+
+    type Dispose = () => void
+
+    class Ctx {
+      private phi: Dispose[] = []                     // accumulated inverses
+      private sigma = new Map<string, unknown>()      // coeffect context
+
+      effect<T>(f: () => [T, Dispose]): T {
+        const [value, g] = f()
+        this.phi.push(g)
+        return value
+      }
+
+      set(key: string, value: unknown) {
+        const prev = this.sigma.get(key)
+        this.sigma.set(key, value)
+        this.notify(key)
+        this.phi.push(() => {
+          prev === undefined ? this.sigma.delete(key) : this.sigma.set(key, prev)
+          this.notify(key)
+        })
+      }
+
+      recover() { while (this.phi.length) this.phi.pop()!() }
+    }
+
+The paper goes further and models activation as an effect iterator: each step yields a state change,
+its inverse and a continuation. That is what makes a half-finished activation revertible, not just a
+completed one. It also unifies the effect context and the coeffect context into a single context type
+and mediates every effect and coeffect through it — the discipline it calls the context paradigm, and
+the source of the observational equivalence up to which two components' effects interleave.
+
+## 4. Fiber lifecycle
+
+A fiber is the runtime instance of a component — its dependencies, its provisions, and its effect
+iterator. The calculus is nine rules over four lifecycle states (Inactive, Reloading, Active,
+Unloading) plus an empty node for a fiber absent from the registry. O- rules are actions the
+orchestrator may take, their premises saying when the action is legal rather than when it happens;
+L- rules are steps the system takes unprompted whenever their premises hold.
+
+    O-Insert   ∅         → Inactive    orchestrator registers the fiber
+    O-Retire   any state               raises the retirement flag; carries out nothing itself
+    O-Remove   Inactive  → ∅           drops the entry — only once retired, Inactive,
+                                       provisioning nothing, and parent to no fiber
+    L-Begin    Inactive  → Reloading   every declared key resolves; the effect iterator starts
+    L-Iter     Reloading → Reloading   one iteration: a state change, its inverse, a continuation
+    L-Finish   Reloading → Active      iterator exhausted, the accumulator holds every inverse
+    L-Divert   Reloading → Unloading   a dependency changed mid-activation
+    L-Leave    Active    → Unloading   a dependency was withdrawn, or the fiber was retired
+    L-Unload   Unloading → Inactive    the accumulator runs
+
+L-Divert is the safety rule. If a dependency changes while a component is still activating, the
+fiber is diverted straight to unloading rather than finishing against a stale environment. The
+effects it already applied are in the accumulator, so the rollback is complete even though the
+activation was not.
+
+Removal is deliberately two rules, not one. O-Retire only raises a flag and applies at any state;
+the lifecycle rules carry the request out, through L-Leave and L-Unload, and only then may O-Remove
+drop the entry. Dropping an Active fiber outright would discard its accumulator and leak.
+
+    const fiber = ctx.use(auth, { secret })
+    await fiber.dispose()   // fiber.dispose *is* the accumulator; awaiting it recovers the context
+
+Reconfiguration is not a method on the fiber: the declarative loader owns it. The orchestrator edits
+a configuration record and the loader reconciles the difference into fiber operations — for a changed
+config, a dispose and a fresh ctx.use, leaving untouched entries running.
+
+## 5. What the guarantees buy you
+
+Recovery exactness: removing a component restores the context to a state observationally equivalent
+to the one before it was added, even if other independent fibers applied their own effects in the
+meantime — so the comparison is against those effects replayed, not against a frozen snapshot.
+Observational, not bit-identical: what matters is that no available operation can tell the two apart.
+The weakening is also the limit — each binding is restored only up to what its own key's operations
+can observe, so a monotone allocator is not rewound, a heap's layout does not come back from a free,
+and a message already sent stays sent.
+
+Confluence: once the system is quiescent — every fiber settled at its target view, no transition in
+flight — the state it comes to rest at is the one the same insertions and retirements would have
+produced had each surviving component been loaded once, in dependency order, and none ever unloaded.
+The dynamic history leaves no trace; the normal form is the statically assembled system. Two caveats:
+the theorem is about the lifecycle rules alone, holding the orchestration steps fixed, and it carries
+a second hypothesis, that every component is total on its provision. That different insertion orders
+also land in the same place follows separately, from the set of Active fibers being determined by
+which components are present and unretired and by the dependency graph, not by the schedule.
+
+## 6. Why a TypeScript developer should care
+
+Plugin systems: Cordis is the meta-framework behind Koishi and its 4000-plus community plugins —
+install, uninstall and reconfigure live, without restarting the process. The API shown here is
+Cordis v4, the version the paper describes; Koishi currently ships on v3, which shares the
+compositional model but differs in the effect and coeffect semantics and in the loader.
+
+Hot reload that cleans up: ordinary HMR swaps the module and leaves old listeners and registry
+entries behind. Effect tracking does that bookkeeping for the plugin author.
+
+Agent harnesses: if an agent rewrites its own tools and components at runtime, the runtime has to
+answer one question reliably — what did this component change, and how do I undo it?
+
+A pattern you can steal without the framework: make every effect return its inverse, keep them on a
+stack, unwind in reverse. That is the entire temporal mechanism.
+
+## Limitations
+
+An effect is revertible only where the system can modify a location exclusively and restore what was
+there before. Outside that boundary an operation is untracked and acts as the identity — a direct
+process.on, a mutation of somebody else's object. The boundary is drawn per location rather than per
+medium, and a coeffect can move it: reifying an external location confines access to operations that
+each supply an inverse. What crosses irreversibly is emission, not acquisition — open installs a
+descriptor that close removes, but the bytes a write pushes through it are gone, and recovering from
+those means withholding the emission or compensating for it.
+
+On hostile code the paper is more specific than "no defence". Declared inject plus context
+interception already amount to capability-style access control over proxy-mediated dependencies, and
+an orchestrator can attenuate any component's access without touching the provider. But language-level
+checks are moot against code that can reach the host runtime directly, so genuinely untrusted
+components need an execution boundary beyond the language — a sandboxed process, a separate runtime,
+a container — with the bridge appearing on the host side as an ordinary fiber.
+
+This page is a teaching simplification; the formal content (effect iterators, observational
+equivalence, the metatheory of the calculus) is in the paper.
