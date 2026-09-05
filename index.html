@@ -48,7 +48,7 @@
     --ink:#DDE3E9; --ink-dim:#8C99A6;
     /* instrumentation: warm = energised, cold = stored */
     --live:#F0A94C; --stored:#7FA7C4; --warn:#C98A44;
-    --idle-line:#3A4552; --idle-ink:#93A0AD;
+    --idle-line:#3A4552; --idle-ink:#93A0AD; --fail:#C4705E;
     /* syntax */
     --c-key:#C79BDF; --c-str:#83C79A; --c-com:#697887; --c-fn:#8FB8E8; --c-typ:#DFAF72;
     --r:2px;
@@ -167,6 +167,7 @@
     padding:3px 8px;border-radius:20px;border:1px solid currentColor;white-space:nowrap}
   .s-active{color:var(--live)}.s-pending{color:var(--warn)}
   .s-idle{color:var(--idle-ink)}.s-unload{color:var(--stored)}
+  .s-failed{color:var(--fail)}
 
   /* ---- sandbox ---- */
   .sandbox{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -178,6 +179,7 @@
     box-shadow:0 0 0 1px rgba(240,169,76,.09), 0 0 18px -6px rgba(240,169,76,.4)}
   .fiber.wait{border-color:rgba(201,138,68,.45);background:#22201A}
   .fiber.gone{border-color:rgba(127,167,196,.45);background:#1B2229}
+  .fiber.failed{border-color:rgba(196,112,94,.55);background:#241B19}
   .fiber .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
   .fiber .nm{font-family:"IBM Plex Mono",monospace;font-size:13.5px;font-weight:500}
   .fiber .meta{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-dim);margin-top:6px}
@@ -205,6 +207,11 @@
     color:var(--idle-ink);flex:none}
   #demoD .rows li .set.full{color:var(--live)}
   #demoD .rows li.final{background:#242D38;border-color:var(--etch-lit)}
+
+  #demoE .rows li .val{font-family:"IBM Plex Mono",monospace;font-size:12px;
+    color:var(--live);flex:none;transition:color .4s ease}
+  #demoE .rows li.cold .val{color:var(--stored)}
+  #e-metrics li{animation:none}          /* a readout that ticks must not animate on every tick */
 
   .verdict{margin-top:16px;padding:12px 14px;border-radius:var(--r);
     background:#20261F;border:1px solid rgba(240,169,76,.5);color:var(--live);
@@ -236,7 +243,7 @@
   <p class="kicker">A walkthrough of arXiv:2608.25512 (Shi, Zhang and Cui, 2026)</p>
   <h1>Spatiotemporal composability</h1>
   <p class="lead">You disable a plugin in your editor and it asks you to restart. Not because the code is still loaded, but because nobody knows what that plugin changed. This is a runtime that knows — and this page lets you operate it.</p>
-  <p class="muted">Four sandboxes, each isolating one mechanism. Everything is live: install components, watch the inverse stack unwind, break a dependency mid-activation and see what the runtime does about it.</p>
+  <p class="muted">Five sandboxes. Four isolate one mechanism each; the last runs them together on a harness that rewrites itself while serving. Everything is live: install components, watch the inverse stack unwind, break a dependency mid-activation and see what the runtime does about it.</p>
   <div class="bench">
   <ul class="toc">
     <li><a href="#axes">01 &nbsp; Two orthogonal axes</a></li>
@@ -577,6 +584,33 @@
     <li><strong>Hot reload that actually cleans up.</strong> Ordinary HMR swaps the module and leaves the old listeners and registry entries behind. Effect tracking does that bookkeeping for the plugin author.</li>
     <li><strong>A pattern you can steal without the framework.</strong> Make every effect return its inverse, keep them on a stack, unwind in reverse. That is the entire temporal mechanism.</li>
   </ul>
+
+  <h3>All of it, on one bench</h3>
+  <p>A harness that holds a session cache and serves requests, with a tool suite it can redeploy underneath itself. Deploy a new build and watch what does <em>not</em> happen: <code>memory</code> never moves, so the cache survives, and <code>chat</code> goes down and comes back because its coeffect was withdrawn and restored — nobody wrote that order. Then deploy a build that throws halfway through activating. Then deploy a build whose second effect raises: the paper's failure extension routes it out through an aborting <code>L-Divert</code> — the iteration choosing the abort rather than the environment — so it lands back at Inactive having installed nothing, with the error written on the fiber as an outcome that stops it being retried. Then press the last button and see what the coarse-grained workaround costs for the same change.</p>
+
+  <p class="muted">Each sequence is slowed so the rules are readable, so the seconds are theatre; the two columns that mean something are the session cache and the restart count. In the paper's terms, rebuilding process-local state after a restart takes seconds to minutes, and staying available across it is what forces you into redundant replicas.</p>
+
+  <div class="demo" id="demoE">
+    <div class="sandbox">
+      <div>
+        <h4>Harness</h4>
+        <div id="e-fibers"></div>
+      </div>
+      <div>
+        <div class="pane">
+          <h4>Meanwhile, it is serving</h4>
+          <ul class="rows" id="e-metrics"></ul>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <button id="e-deploy">Deploy a new tool build</button>
+      <button id="e-faulty">Deploy one that throws</button>
+      <button id="e-restart" class="ghost">Restart the process instead</button>
+      <button id="e-reset" class="ghost">reset</button>
+    </div>
+    <ul class="log" id="e-log"></ul>
+  </div>
 
   <h3>Where the discipline stops</h3>
   <p>An effect is revertible only where the system can modify a location exclusively <em>and</em> restore what was there before. Outside that line an operation is untracked and acts as the identity — a direct <code>process.on</code>, a mutation of somebody else's object. The paper's point is that the line is drawn per location rather than per medium, and that a coeffect can move it: reifying an external location confines access to a set of operations that can each supply an inverse, and what acted as the identity becomes tracked. A scratch file under a private path is inside; the same path shared with another program is outside.</p>
@@ -992,6 +1026,188 @@
   });
   el('d-reset').addEventListener('click', dReset);
   dReset();
+
+  /* ============ 06 · the whole thing, on a bench ============ */
+  var HREG = [
+    { id:'memory', inject:[],          provides:'store',   fx:['set(store, Store)','effect(embeddings.warm)'] },
+    { id:'tools',  inject:['store'],   provides:'toolset', fx:['set(toolset, build)','on(call, dispatch)','effect(schema.register)'] },
+    { id:'chat',   inject:['toolset'], provides:null,      fx:['on(request, handle)','effect(stream.open)'] }
+  ];
+  var hOn = { memory:true, tools:true, chat:true };
+  var hVer = 1, hBusy = false, hServing = true, hFailed = false;
+  var M = { served:0, cache:0, down:0, restarts:0, peak:0 };
+
+  function hResolve(){
+    var prov = {}, st = {};
+    HREG.forEach(function(p){
+      if (!hOn[p.id]) { st[p.id] = 'inactive'; return; }
+      var ok = p.inject.every(function(k){ return prov[k]; });
+      st[p.id] = ok ? 'active' : 'pending';
+      if (ok && p.provides) prov[p.provides] = true;
+    });
+    return st;
+  }
+  var hRows = null;
+  function hBuildMetrics(){
+    var n = el('e-metrics'); if (!n) return;
+    n.innerHTML = ''; hRows = [];
+    ['requests served','session cache','time not serving','process restarts'].forEach(function(label){
+      var li = document.createElement('li'); li.className = 'fx';
+      var a = document.createElement('span'); a.textContent = label;
+      var b = document.createElement('span'); b.className = 'val';
+      li.appendChild(a); li.appendChild(b); n.appendChild(li);
+      hRows.push({ li: li, val: b });
+    });
+  }
+  function hMetrics(){
+    if (!hRows) return;
+    var v = [ M.served.toLocaleString(),
+              M.cache.toLocaleString() + ' items',
+              (M.down / 1000).toFixed(1) + ' s',
+              String(M.restarts) ];
+    var cold = [ false, M.cache < M.peak, M.down > 3000, M.restarts > 0 ];
+    hRows.forEach(function(r, i){
+      if (r.val.textContent !== v[i]) r.val.textContent = v[i];   // touch the DOM only on a change
+      var cls = cold[i] ? 'inv cold' : 'fx';
+      if (r.li.className !== cls) r.li.className = cls;
+    });
+  }
+  function hPaint(){
+    var st = hResolve(), host = el('e-fibers'); if (!host) return;
+    host.innerHTML = '';
+    HREG.forEach(function(p){
+      var s = st[p.id], t = badge(s), d = document.createElement('div');
+      if (p.id === 'tools' && hFailed) { s = 'failed'; t = ['s-failed','Failed']; }
+      d.className = 'fiber' + (s==='active' ? ' on' : s==='pending' ? ' wait'
+                             : s==='failed' ? ' failed' : '');
+      var top = document.createElement('div'); top.className = 'top';
+      var nm = document.createElement('span'); nm.className = 'nm';
+      nm.textContent = p.id + (p.id === 'tools' ? ' v' + hVer : '');
+      var bd = document.createElement('span'); bd.className = 'badge ' + t[0];
+      bd.textContent = (s === 'pending') ? 'Pending: ' + p.inject.join(', ') : t[1];
+      top.appendChild(nm); top.appendChild(bd);
+      var meta = document.createElement('div'); meta.className = 'meta';
+      meta.textContent = 'inject [' + p.inject.join(', ') + ']' +
+        (p.provides ? '  \u00b7  provide ' + p.provides : '') + '  \u00b7  ' + p.fx.length + ' effects';
+      d.appendChild(top); d.appendChild(meta); host.appendChild(d);
+    });
+    hMetrics();
+  }
+  var hVisible = false;
+  if (typeof IntersectionObserver === 'function') {
+    new IntersectionObserver(function(es){ hVisible = es[0].isIntersecting; },
+      { threshold: 0 }).observe(el('demoE'));
+  } else { hVisible = true; }
+  setInterval(function(){
+    if (!hVisible || document.hidden) return;      // no work while nobody is looking
+    if (hServing) { M.served += 4 + Math.floor(Math.random()*4); M.cache += 2;
+                    if (M.cache > M.peak) M.peak = M.cache; }
+    else M.down += 500;
+    hMetrics();
+  }, 500);
+
+  function hBtns(on){
+    ['e-deploy','e-faulty','e-restart','e-reset'].forEach(function(id){ el(id).disabled = !on; });
+  }
+  function hLog(rule, text){ logTo(el('e-log'), rule, text, 12); }
+
+  async function takeDown(reasonForTools){
+    hServing = false;
+    hLog('O-Retire', 'tools v' + hVer + ': ' + reasonForTools);
+    await wait(240);
+    hLog('L-Leave', 'tools v' + hVer + ': Active \u2192 Unloading \u2014 it stops providing toolset,'
+       + ' but its accumulator has not run yet');
+    await wait(300);
+    hOn.chat = false; hPaint();
+    hLog('L-Leave', 'chat: toolset resolves to nothing now \u2014 Active \u2192 Unloading');
+    await wait(300);
+    hLog('L-Unload', 'chat: 2 inverses \u2014 the request handler is detached');
+    await wait(240);
+    hOn.tools = false; hPaint();
+    hLog('L-Unload', 'tools v' + hVer + ': guard clear, nothing relies on it now \u2014 3 inverses');
+    await wait(200);
+  }
+  async function bringUp(v){
+    hVer = v; hOn.tools = true; hPaint();
+    hLog('O-Insert', 'tools v' + v + ': registered \u2014 Inactive until store resolves');
+    await wait(240);
+    hLog('L-Finish', 'tools v' + v + ': 3 effects tracked');
+    await wait(240);
+    hOn.chat = true; hPaint();
+    hLog('L-Finish', 'chat: toolset resolves again \u2014 2 effects tracked');
+    hServing = true;
+  }
+
+  el('e-deploy').addEventListener('click', async function(){
+    if (hBusy) return; hBusy = true; hBtns(false);
+    await takeDown('a new build is ready');
+    await bringUp(hVer + 1);
+    hLog('note', 'memory never moved \u2014 the session cache is the one it had before');
+    hBusy = false; hBtns(true); hPaint();
+  });
+
+  el('e-faulty').addEventListener('click', async function(){
+    if (hBusy) return; hBusy = true; hBtns(false);
+    var good = hVer;
+    await takeDown('a new build is ready');
+    var bad = good + 1;
+    hVer = bad; hOn.tools = true; hPaint();
+    hLog('O-Insert', 'tools v' + bad + ': registered');
+    await wait(320);
+    hLog('L-Begin', 'tools v' + bad + ': effect iterator starts');
+    await wait(320);
+    hLog('L-Iter', 'tools v' + bad + ': 1 of 3 applied');
+    await wait(380);
+    hFailed = true; hOn.tools = false; hPaint();
+    hLog('L-Divert', 'tools v' + bad + ': effect 2 raised \u2014 the iteration chose the abort,'
+       + ' not the environment');
+    await wait(420);
+    hLog('L-Unload', 'tools v' + bad + ': the 1 applied effect unwound \u2014 it installed nothing');
+    await wait(400);
+    hLog('note', 'the error is written on the fiber as an outcome, and it stays there: memory kept'
+       + ' running, and the failure never reached the parent');
+    await wait(420);
+    hLog('note', 'L-Begin will not retry a failed fiber against an unchanged environment \u2014 a'
+       + ' retry has to be a revision');
+    await wait(500);
+    hFailed = false;
+    await bringUp(good);
+    hLog('note', 'a reinserted fiber starts without an outcome \u2014 v' + good
+       + ' back, cache intact, no restart');
+    hBusy = false; hBtns(true); hPaint();
+  });
+
+  el('e-restart').addEventListener('click', async function(){
+    if (hBusy) return; hBusy = true; hBtns(false);
+    hServing = false;
+    hOn.memory = hOn.tools = hOn.chat = false; hPaint();
+    hLog('outside the calculus', 'a restart is not a step this model has a rule for');
+    await wait(500);
+    hLog('process', 'exit \u2014 every fiber goes with it, tracked or not');
+    M.cache = 0; hPaint();
+    await wait(2200);
+    hLog('process', 'rebuilding: reconnecting, re-warming the cache\u2026');
+    await wait(3200);
+    hOn.memory = hOn.tools = hOn.chat = true; hVer = hVer + 1;
+    M.restarts += 1; hPaint();
+    hLog('process', 'up on v' + hVer + ' \u2014 cache cold, accumulated state discarded');
+    hServing = true;
+    hBusy = false; hBtns(true); hPaint();
+  });
+
+  el('e-reset').addEventListener('click', function(){
+    if (hBusy) return;
+    hOn = { memory:true, tools:true, chat:true };
+    hVer = 1; hServing = true; hFailed = false;
+    M = { served:0, cache:0, down:0, restarts:0, peak:0 };
+    el('e-log').innerHTML = '';
+    hLog('init', 'harness up, three fibers active');
+    hPaint();
+  });
+
+  hBuildMetrics();
+  hLog('init', 'harness up, three fibers active');
+  hPaint();
 })();
 </script>
 </body>

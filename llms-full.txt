@@ -243,6 +243,25 @@ entries behind. Effect tracking does that bookkeeping for the plugin author.
 A pattern you can steal without the framework. Make every effect return its inverse, keep them on a
 stack, unwind in reverse. That is the entire temporal mechanism.
 
+## 7. Failure, and what a restart costs
+
+The effects a component installs reach outside the context that tracks them, and a location may
+refuse: a port already bound, a file that is not there, a peer that does not answer. The paper's
+failure extension refines the iterator so an iteration may raise instead of yielding a triple. A raise
+exits Reloading by the route of an aborting L-Divert with the premise on the target view dropped —
+the iteration, not the environment, choosing the abort. The fiber routes into Unloading with the
+accumulator built up to the failing iteration and arrives at Inactive having installed nothing, and the
+exit writes the error on the fiber as an outcome. That outcome withholds re-entry: L-Begin is read as
+requiring an error-free fiber, so a raised effect function is not retried against an unchanged
+environment, and a retry has to be a revision — a reinserted fiber starts without an outcome. The
+failure stays on the fiber rather than propagating to its parent, leaving siblings running. Confluence
+excludes failed fibers, since whether an iteration raises depends on the state it meets.
+
+The page closes on a bench that runs all of this at once: a harness holding a session cache and
+serving requests, with a tool suite redeployed underneath it, a build that raises halfway through
+activating, and — for the same change — the coarse-grained alternative of restarting the process,
+which discards the cache and every other piece of process-local state.
+
 ## Limitations
 
 An effect is revertible only where the system can modify a location exclusively and restore what was
