@@ -168,6 +168,20 @@ fiber is diverted straight to unloading rather than finishing against a stale en
 effects it already applied are in the accumulator, so the rollback is complete even though the
 activation was not.
 
+L-Unload carries a premise of its own — ¬relied: no other installed fiber may currently resolve one
+of its declared keys to this one. A provider that has decided to leave therefore sits in Unloading,
+already out of service and provisioning nothing, until every consumer has gone. That single premise
+produces the teardown order nobody scripts: removing a provider takes its dependents down first, and
+only then may the provider unwind. The test is against committed views rather than declarations, so a
+consumer that has already unloaded stops counting, and the guard releases itself with no reference
+count kept anywhere.
+
+In the implementation this is two loops rather than a standing check. Algorithm 3, notify(ctx, keys),
+runs when a binding changes and iterates live fibers, calling refresh on each one whose inject holds
+a changed key at the same realm; it returns the fibers it touched so a caller can wait for them.
+Algorithm 5's unload then awaits exactly those before running its own accumulator, which is the guard
+in code.
+
 Removal is deliberately two rules, not one. O-Retire only raises a flag and applies at any state;
 the lifecycle rules carry the request out, through L-Leave and L-Unload, and only then may O-Remove
 drop the entry. Dropping an Active fiber outright would discard its accumulator and leak.

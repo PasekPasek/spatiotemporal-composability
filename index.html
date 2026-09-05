@@ -436,6 +436,8 @@
   <span class="c-com">/** recover: φ(γ) — inverses in reverse order */</span>
   <span class="c-fn">recover</span>(): <span class="c-key">void</span> { <span class="c-key">while</span> (<span class="c-key">this</span>.phi.length) <span class="c-key">this</span>.phi.<span class="c-fn">pop</span>()!() }
 
+  <span class="c-com">/** the coeffect side in outline only: nothing subscribes here, because reactive</span>
+      <span class="c-com">resolution — inject, target, the ¬relied guard — is the half this class omits */</span>
   <span class="c-key">private</span> <span class="c-fn">notify</span>(key: <span class="c-key">string</span>): <span class="c-key">void</span> {
     <span class="c-key">this</span>.watchers.<span class="c-fn">get</span>(key)?.<span class="c-fn">forEach</span>(fn =&gt; <span class="c-fn">fn</span>())
   }
@@ -507,6 +509,11 @@
 
   <h3>Why removal is two rules, not one</h3>
   <p>Insertion and retirement are the orchestrator's only inputs; it never sets a lifecycle state directly. So <code>O-Retire</code> raises a flag and nothing more, and the lifecycle rules carry the request out — <code>L-Leave</code> down to <em>Unloading</em>, <code>L-Unload</code> back to <em>Inactive</em>, and only then may <code>O-Remove</code> drop the entry, guarded by premises that the fiber is retired, <em>Inactive</em>, provisioning nothing, and parent to no one. Dropping an <em>Active</em> fiber outright would discard its accumulator and leak exactly what the accumulator exists to reclaim.</p>
+
+  <h3>The guard, and where the teardown order comes from</h3>
+  <p><code>L-Unload</code> carries a premise of its own — <code>¬relied</code>: no other installed fiber may currently resolve one of its declared keys to this one. A provider that has decided to leave therefore sits in <em>Unloading</em>, already out of service and provisioning nothing, until every consumer has gone.</p>
+
+  <p>That single premise produces the order <a href="#sandbox">the sandbox in 02</a> shows without anyone scripting it: removing <code>database</code> takes <code>commands</code> and <code>auth</code> down first, and only then may <code>database</code> unwind. The test is against committed views rather than declarations, so a consumer that has already unloaded stops counting — the guard releases itself, with no reference count kept anywhere.</p>
 
   <pre><span class="c-key">const</span> fiber = ctx.<span class="c-fn">use</span>(auth, { secret })
 
@@ -754,8 +761,8 @@
       await wait(420);
       stack = stack.filter(function(e){ return e.fiber !== p.id; });
       renderContext(before);
-      logTo(el('s-log'), 'L-Unload', p.id + ': accumulator ran, ' + p.fx.length +
-        ' inverses in reverse order — back to Inactive');
+      logTo(el('s-log'), 'L-Unload', p.id + ': nothing relies on it now — accumulator ran, ' +
+        p.fx.length + ' inverses in reverse order, back to Inactive');
       await wait(180);
     }
     if (losing.length && !installed[changed]) {
