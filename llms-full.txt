@@ -72,17 +72,15 @@ The entire temporal mechanism, stripped of ergonomics, is a stack of functions:
       private watchers = new Map<string, Set<Dispose>>()
       constructor(private bus: EventTarget) {}
 
-      /** track(f, g): run the effect, keep the inverse — and hand it back, armed once */
+      /** track(f, g): run the effect, keep the inverse, hand it back */
       effect(f: () => Dispose): Dispose {
         const g = f()
+        // set once, here at registration — but the closure below runs later, and may run
+        // more than once: the caller holds it and recover() reaches it too. The first call
+        // spends it, every later one is a no-op. Cordis calls this the armed flag; applying
+        // an inverse twice would meet a state no application of the effect ever produced.
         let armed = true
-        const dispose: Dispose = () => {
-          if (!armed) return                      // an inverse must fire at most once
-          armed = false
-          const i = this.phi.indexOf(dispose)
-          if (i >= 0) this.phi.splice(i, 1)       // leave φ, so recover cannot repeat it
-          g()
-        }
+        const dispose: Dispose = () => { if (armed) { armed = false; g() } }
         this.phi.push(dispose)
         return dispose
       }

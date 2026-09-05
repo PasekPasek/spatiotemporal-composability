@@ -390,17 +390,15 @@
   <span class="c-key">private</span> watchers = <span class="c-key">new</span> <span class="c-typ">Map</span>&lt;<span class="c-key">string</span>, <span class="c-typ">Set</span>&lt;<span class="c-typ">Dispose</span>&gt;&gt;()
   <span class="c-fn">constructor</span>(<span class="c-key">private</span> bus: <span class="c-typ">EventTarget</span>) {}
 
-  <span class="c-com">/** track(f, g): run the effect, keep the inverse — and hand it back, armed once */</span>
+  <span class="c-com">/** track(f, g): run the effect, keep the inverse, hand it back */</span>
   <span class="c-fn">effect</span>(f: () =&gt; <span class="c-typ">Dispose</span>): <span class="c-typ">Dispose</span> {
     <span class="c-key">const</span> g = <span class="c-fn">f</span>()
+    <span class="c-com">// set once, here at registration — but the closure below runs later, and may run</span>
+    <span class="c-com">// more than once: the caller holds it and recover() reaches it too. The first call</span>
+    <span class="c-com">// spends it, every later one is a no-op. Cordis calls this the armed flag; applying</span>
+    <span class="c-com">// an inverse twice would meet a state no application of the effect ever produced.</span>
     <span class="c-key">let</span> armed = <span class="c-key">true</span>
-    <span class="c-key">const</span> dispose: <span class="c-typ">Dispose</span> = () =&gt; {
-      <span class="c-key">if</span> (!armed) <span class="c-key">return</span>                      <span class="c-com">// an inverse must fire at most once</span>
-      armed = <span class="c-key">false</span>
-      <span class="c-key">const</span> i = <span class="c-key">this</span>.phi.<span class="c-fn">indexOf</span>(dispose)
-      <span class="c-key">if</span> (i &gt;= 0) <span class="c-key">this</span>.phi.<span class="c-fn">splice</span>(i, 1)         <span class="c-com">// leave φ, so recover cannot repeat it</span>
-      <span class="c-fn">g</span>()
-    }
+    <span class="c-key">const</span> dispose: <span class="c-typ">Dispose</span> = () =&gt; { <span class="c-key">if</span> (armed) { armed = <span class="c-key">false</span>; <span class="c-fn">g</span>() } }
     <span class="c-key">this</span>.phi.<span class="c-fn">push</span>(dispose)
     <span class="c-key">return</span> dispose
   }
