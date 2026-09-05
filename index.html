@@ -187,7 +187,8 @@
     font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink-dim);
     border-top:1px solid var(--etch)}
   .log li{padding:2px 0;animation:pop .25s ease both}
-  .log li b{color:var(--live);font-weight:500}
+  .log li b.rule{color:var(--live);font-weight:500}
+  .log li b.note{color:var(--ink-dim);font-weight:400;font-style:italic}
 
   /* ---- schematic ---- */
   .fsm{width:100%;height:auto;display:block}
@@ -590,9 +591,13 @@
   }
   function logTo(node, rule, text, keep){
     var n = document.createElement('li');
-    n.innerHTML = '<b>' + rule + '</b> · ' + text;
+    var b = document.createElement('b');
+    b.className = /^[OL]-/.test(rule) ? 'rule' : 'note';   // a rule of the calculus, or a remark
+    b.textContent = rule;
+    n.appendChild(b);
+    n.appendChild(document.createTextNode(' · ' + text));
     node.insertBefore(n, node.firstChild);
-    while (node.children.length > (keep || 6)) node.removeChild(node.lastChild);
+    while (node.children.length > (keep || 12)) node.removeChild(node.lastChild);
   }
 
   /* ============ 02 · runtime sandbox ============ */
@@ -683,31 +688,42 @@
     var losing = REG.filter(function(p){ return before[p.id]==='active' && after[p.id]!=='active'; }).reverse();
     var gaining = REG.filter(function(p){ return before[p.id]!=='active' && after[p.id]==='active'; });
 
+    if (losing.length) {
+      logTo(el('s-log'), 'O-Retire', changed + ': retirement flag raised — the lifecycle rules carry it out');
+    }
     for (var i = 0; i < losing.length; i++) {
       var p = losing[i], ov = {}; ov[p.id] = 'unload';
       paint(before, ov);
-      logTo(el('s-log'), p.id === changed ? 'O-Remove' : 'notify',
-        p.id + ': recover — unwinding ' + p.fx.length + ' effects' +
-        (p.id === changed ? '' : ' (dependency withdrawn)'));
+      logTo(el('s-log'), 'L-Leave', p.id + ': ' +
+        (p.id === changed ? 'retired while Active' : 'a declared key lost its provider') +
+        ' — Active → Unloading');
       await wait(420);
       stack = stack.filter(function(e){ return e.fiber !== p.id; });
       renderContext(before);
+      logTo(el('s-log'), 'L-Unload', p.id + ': accumulator ran, ' + p.fx.length +
+        ' inverses in reverse order — back to Inactive');
       await wait(180);
     }
+    if (losing.length && !installed[changed]) {
+      logTo(el('s-log'), 'O-Remove', changed + ': retired, Inactive, provisioning nothing — entry dropped');
+    }
 
+    if (gaining.length && installed[changed] && before[changed] !== 'active') {
+      logTo(el('s-log'), 'O-Insert', changed + ': registered — Inactive until its keys resolve');
+    }
     for (var j = 0; j < gaining.length; j++) {
       var q = gaining[j];
       q.fx.forEach(function(label){ stack.push({ fiber: q.id, label: label }); });
-      logTo(el('s-log'), q.id === changed ? 'O-Insert' : 'L-Finish',
-        q.id + ': ' + (q.id === changed ? 'inserted, ' : 'dependencies satisfied, ') +
-        'tracking ' + q.fx.length + ' effects');
+      logTo(el('s-log'), 'L-Finish', q.id +
+        ': every declared key resolves — ' + q.fx.length + ' effects tracked');
       paint(after);
       await wait(340);
     }
 
     REG.forEach(function(p){
       if (after[p.id]==='pending' && before[p.id]!=='pending') {
-        logTo(el('s-log'), 'L-Wait', p.id + ': blocked on [' + missingFor(p, after).join(', ') + ']');
+        logTo(el('s-log'), 'no rule applies', p.id + ' is held at Inactive — L-Begin needs [' +
+          missingFor(p, after).join(', ') + ']');
       }
     });
 
@@ -845,8 +861,6 @@
     ]));
   });
   el('c-remove').addEventListener('click', function(){
-    var tail = [{ node:'inactive', edge:null, rule:'O-Remove', text:'premises met — the entry is dropped from the registry' },
-                { node:'absent',   edge:'remove', rule:'', text:'' }];
     if (cState === 'active') {
       cRun([
         { node:'active',   edge:null,     rule:'O-Retire', text:'a flag, nothing more — O-Retire applies at any state' },
