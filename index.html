@@ -200,6 +200,11 @@
   .fsm .edge{stroke:var(--idle-line);fill:none;marker-end:url(#ah);transition:stroke .3s ease}
   .fsm .edge.hot{stroke:var(--live);stroke-width:2;marker-end:url(#ahh)}
 
+  #demoD .rows li .set{font-family:"IBM Plex Mono",monospace;font-size:11.5px;
+    color:var(--idle-ink);flex:none}
+  #demoD .rows li .set.full{color:var(--live)}
+  #demoD .rows li.final{background:#242D38;border-color:var(--etch-lit)}
+
   .verdict{margin-top:16px;padding:12px 14px;border-radius:var(--r);
     background:#20261F;border:1px solid rgba(240,169,76,.5);color:var(--live);
     font-family:"IBM Plex Mono",monospace;font-size:13px}
@@ -351,7 +356,7 @@
     <p class="hint" id="a-hint">Apply a few effects, then step back through them one at a time.</p>
   </div>
 
-  <p>In Cordis this collapses into a single call. The effect returns its own inverse and the runtime keeps it:</p>
+  <p>In <a href="https://github.com/cordiverse">Cordis</a>, the TypeScript reference implementation, this collapses into a single call. The effect returns its own inverse and the runtime keeps it:</p>
 
   <pre><span class="c-key">export function</span> <span class="c-fn">apply</span>(ctx: <span class="c-typ">Context</span>) {
   <span class="c-com">// explicit effect: forward and inverse in one place</span>
@@ -495,41 +500,58 @@
   <p>The weakening is also the limit. Each binding is restored only up to what its own key's operations can observe, so — in the paper's examples — a monotone allocator is not rewound, a heap's layout does not come back from a <code>free</code>, and a message already sent stays sent. A location the system reifies at no key is outside the calculus altogether.</p>
 
   <h3>Confluence</h3>
-  <p>Once the system is <em>quiescent</em> — every fiber settled at its target view, no transition in flight — the state it comes to rest at is the state the same insertions and retirements would have produced had each surviving component been loaded once, in dependency order, and none ever unloaded. The dynamic history leaves no trace, and the normal form it converges on is the statically assembled system. That is what makes a dynamic system as predictable as a static one.</p>
+  <p id="conf-lead">Once the system is <em>quiescent</em> — every fiber settled at its target view, no transition in flight — the state it comes to rest at is the state the same insertions and retirements would have produced had each surviving component been loaded once, in dependency order, and none ever unloaded. The dynamic history leaves no trace, and the normal form it converges on is the statically assembled system. That is what makes a dynamic system as predictable as a static one.</p>
 
   <p>Two caveats the demo below cannot show. The theorem is about the lifecycle rules alone, holding the orchestration steps fixed — different inputs land in different places for no interesting reason — and it carries a second hypothesis, that every component is total on its provision. What makes the two runs below agree despite different <em>insertion</em> orders is a separate and simpler fact: the set of fibers that ends up Active is determined by which components are present and unretired and by the dependency graph, not by the schedule.</p>
+
+  <p>Below, both runtimes assemble the same three components — <code>db</code> provides storage,
+  <code>auth</code> injects it, <code>api</code> injects both — over different histories. The right-hand
+  figure in each row is the set of fibers that is <em>Active</em> after that step, computed by the same
+  resolver, not scripted. Watch that column: partway through, the two runtimes disagree completely —
+  one has nothing up while the other is fully assembled — and the last rows match.</p>
 
   <div class="demo" id="demoD">
     <div class="panes">
       <div class="pane">
-        <h4>Runtime A</h4><ul class="rows" id="d-ops-a"></ul>
-        <div style="border-top:1px solid var(--line);margin:10px 0 8px"></div>
-        <h4>Final Σ</h4><ul class="rows" id="d-out-a"></ul>
+        <h4>Runtime A</h4>
+        <ul class="rows" id="d-trace-a"></ul>
       </div>
       <div class="pane">
-        <h4>Runtime B</h4><ul class="rows" id="d-ops-b"></ul>
-        <div style="border-top:1px solid var(--line);margin:10px 0 8px"></div>
-        <h4>Final Σ</h4><ul class="rows" id="d-out-b"></ul>
+        <h4>Runtime B</h4>
+        <ul class="rows" id="d-trace-b"></ul>
       </div>
     </div>
     <div class="controls">
       <button id="d-run">Replay both histories</button>
-      <button id="d-shuffle" class="ghost">Shuffle runtime B</button>
+      <button id="d-shuffle" class="ghost">Give B a different history</button>
       <button id="d-reset" class="ghost">reset</button>
     </div>
-    <div class="verdict" id="d-verdict" hidden>Σ_A ≃ Σ_B — same configuration, different history</div>
+    <div class="verdict" id="d-verdict" hidden></div>
   </div>
 </section>
 
 <section id="practice">
   <div class="sec-head"><span class="sec-num">06</span>
-    <div><h2>Why a TypeScript developer should care</h2></div>
+    <div><h2>Why a TypeScript developer should care</h2>
+      <p class="muted" style="margin:6px 0 0">Where the absence of this discipline actually costs you.</p></div>
   </div>
 
+  <h3>Self-modifying agent harnesses</h3>
+  <p>A harness is the runtime around a model: it composes tool suites and execution environments, governs permissions and sandboxing, keeps session state, manages context and memory, and orchestrates subagents. The paper's forward-looking case is a harness that generates and deploys modifications to <em>its own</em> components while it is still serving requests — model-synthesised reusable tools being the narrow precursor already in use. Every one of those modifications is an instance of dynamic composition.</p>
+
+  <p>Because they land continuously and with little or no human oversight, the usual fallback stops being viable. Without temporal composability each self-modification is a full process restart that discards everything process-local: caches, open connections, partial computations. Rebuilding that takes seconds to minutes. At self-modification frequency the unavailability accumulates, in-flight tasks are disrupted over and over, and — the failure mode worth sitting with — <strong>a faulty self-modification can disable the very process you would need in order to recover from it</strong>.</p>
+
+  <p>Without spatial composability the failure is quieter and arrives later. Every module has to notice for itself when a dependency appears, disappears or changes identity, and can only do so by ad hoc means. A naive code-replacement strategy breaks dependents silently, or introduces a circular dependency that surfaces at reload time rather than at the moment the change was made.</p>
+
+  <h3>Why restarting the process is not the answer</h3>
+  <p>Operating systems already provide temporal composability — at the granularity of a process. Container orchestrators already provide spatial composability — at the granularity of a service. That substitute is a large part of why the problem has attracted so little formal attention: most software simply tolerates the gap.</p>
+
+  <p>It is not free. A restart discards accumulated state and takes seconds to minutes to rebuild, so staying available across one means running redundant replicas — paying in hardware for the inability to recover a single component. Container-level orchestration cannot express a dependency between two components sharing an address space, and pushes onto the network what could have been a local function call. Both mechanisms sit at the process and container boundary, while the systems built on them compose at a far finer grain. That mismatch is the gap this paradigm aims at.</p>
+
+  <h3>The everyday cases</h3>
   <ul class="plain">
-    <li><strong>Plugin systems.</strong> Cordis is the meta-framework behind Koishi and its 4000-plus community plugins: install, uninstall and reconfigure live, without restarting the process.</li>
+    <li><strong>Plugin systems.</strong> <a href="https://github.com/cordiverse">Cordis</a> is the meta-framework behind <a href="https://koishi.chat/en-US/">Koishi</a> and its 4000-plus community plugins: install, uninstall and reconfigure live, without restarting the process.</li>
     <li><strong>Hot reload that actually cleans up.</strong> Ordinary HMR swaps the module and leaves the old listeners and registry entries behind. Effect tracking does that bookkeeping for the plugin author.</li>
-    <li><strong>Agent harnesses.</strong> If an agent rewrites its own tools and components at runtime, the runtime has to answer one question reliably: what did this component change, and how do I undo it?</li>
     <li><strong>A pattern you can steal without the framework.</strong> Make every effect return its inverse, keep them on a stack, unwind in reverse. That is the entire temporal mechanism.</li>
   </ul>
 
@@ -844,61 +866,93 @@
   cBtns();
 
   /* ============ 05 · confluence ============ */
-  var SEQ_A = [
-    { op:'+ auth',  note:'pending, no db' },
-    { op:'+ api',   note:'pending, no db or auth' },
-    { op:'+ db',    note:'activation cascade' },
-    { op:'- auth',  note:'api goes down with it' },
-    { op:'+ auth',  note:'both come back' }
+  var CREG = [
+    { id:'db',   inject:[],            provides:'db'   },
+    { id:'auth', inject:['db'],        provides:'auth' },
+    { id:'api',  inject:['db','auth'], provides:null   }
   ];
-  var POOL_B = [
-    [ { op:'+ db',   note:'active immediately' },
-      { op:'+ api',  note:'pending, no auth' },
-      { op:'+ auth', note:'api activates reactively' } ],
-    [ { op:'+ api',  note:'pending, nothing provided yet' },
-      { op:'+ auth', note:'still pending, no db' },
-      { op:'+ db',   note:'both activate at once' } ],
-    [ { op:'+ db',   note:'active immediately' },
-      { op:'+ auth', note:'active' },
-      { op:'- db',   note:'auth unloads too' },
-      { op:'+ db',   note:'auth returns' },
-      { op:'+ api',  note:'all dependencies present' } ]
+  /* the set of Active fibers is a fixed point of dependency resolution —
+     a function of what is installed, never of the order it was installed in */
+  function activeSet(installed){
+    var active = {}, changed = true;
+    while (changed){
+      changed = false;
+      CREG.forEach(function(p){
+        if (!installed[p.id] || active[p.id]) return;
+        var ok = p.inject.every(function(k){
+          return CREG.some(function(q){ return q.provides === k && active[q.id]; });
+        });
+        if (ok){ active[p.id] = true; changed = true; }
+      });
+    }
+    return CREG.filter(function(p){ return active[p.id]; }).map(function(p){ return p.id; });
+  }
+  var HIST_A = ['+auth','+api','+db','-auth','+auth'];
+  var HIST_B = [
+    ['+db','+api','+auth'],
+    ['+api','+auth','+db'],
+    ['+db','+auth','-db','+db','+api']
   ];
   var bIdx = 0, dBusy = false;
+
+  function traceRow(op, active, last){
+    var li = document.createElement('li');
+    li.className = (op.charAt(0) === '+' ? 'fx' : 'inv') + (last ? ' final' : '');
+    var a = document.createElement('span'); a.textContent = op;
+    var b = document.createElement('span');
+    b.className = 'set' + (active.length === CREG.length ? ' full' : '');
+    b.textContent = active.length ? active.join(' ') : 'nothing active';
+    li.appendChild(a); li.appendChild(b);
+    return li;
+  }
+  async function dPlay(hist, node){
+    node.innerHTML = '';
+    var installed = {};
+    for (var i = 0; i < hist.length; i++){
+      var op = hist[i], id = op.slice(1);
+      if (op.charAt(0) === '+') installed[id] = true; else delete installed[id];
+      node.appendChild(traceRow(op, activeSet(installed), i === hist.length - 1));
+      await wait(560);
+    }
+    return activeSet(installed);
+  }
   function dReset(){
-    empty(el('d-ops-a'), 'no operations');
-    empty(el('d-ops-b'), 'no operations');
-    empty(el('d-out-a'), 'Σ = {}');
-    empty(el('d-out-b'), 'Σ = {}');
+    empty(el('d-trace-a'), 'not run');
+    empty(el('d-trace-b'), 'not run');
     el('d-verdict').hidden = true;
   }
-  async function dPlay(seq, ops, out){
-    ops.innerHTML = '';
-    for (var i = 0; i < seq.length; i++){
-      var s = seq[i];
-      ops.appendChild(row(s.op, s.op[0] === '+' ? 'fx' : 'inv', s.note));
-      await wait(520);
-    }
-    out.innerHTML = '';
-    ['db', 'auth', 'api'].forEach(function(k){ out.appendChild(row(k, 'fx', 'Active')); });
+  function previewB(){
+    var node = el('d-trace-b'); node.innerHTML = '';
+    HIST_B[bIdx].forEach(function(op){
+      var li = document.createElement('li');
+      li.className = op.charAt(0) === '+' ? 'fx' : 'inv';
+      var a = document.createElement('span'); a.textContent = op;
+      var b = document.createElement('span'); b.className = 'set'; b.textContent = '?';
+      li.appendChild(a); li.appendChild(b); node.appendChild(li);
+    });
   }
-  el('d-run').addEventListener('click', async function(){
+  async function dRun(){
     if (dBusy) return;
-    dBusy = true; el('d-run').disabled = true; dReset();
-    await Promise.all([
-      dPlay(SEQ_A, el('d-ops-a'), el('d-out-a')),
-      dPlay(POOL_B[bIdx], el('d-ops-b'), el('d-out-b'))
+    dBusy = true; el('d-run').disabled = true; el('d-shuffle').disabled = true;
+    el('d-verdict').hidden = true;
+    var res = await Promise.all([
+      dPlay(HIST_A, el('d-trace-a')),
+      dPlay(HIST_B[bIdx], el('d-trace-b'))
     ]);
-    await wait(280);
+    await wait(240);
+    var same = res[0].join(' ') === res[1].join(' ');
+    el('d-verdict').textContent = same
+      ? 'Both came to rest at ' + res[0].join(', ') + ' — ' + HIST_A.length +
+        ' steps against ' + HIST_B[bIdx].length + '. The history left no trace.'
+      : 'Divergent: ' + res[0].join(', ') + ' vs ' + res[1].join(', ');
     el('d-verdict').hidden = false;
-    el('d-run').disabled = false; dBusy = false;
-  });
+    el('d-run').disabled = false; el('d-shuffle').disabled = false; dBusy = false;
+  }
+  el('d-run').addEventListener('click', dRun);
   el('d-shuffle').addEventListener('click', function(){
     if (dBusy) return;
-    bIdx = (bIdx + 1) % POOL_B.length;
-    dReset();
-    var ops = el('d-ops-b'); ops.innerHTML = '';
-    POOL_B[bIdx].forEach(function(s){ ops.appendChild(row(s.op, s.op[0]==='+' ? 'fx' : 'inv', s.note)); });
+    bIdx = (bIdx + 1) % HIST_B.length;
+    dReset(); previewB(); dRun();
   });
   el('d-reset').addEventListener('click', dReset);
   dReset();

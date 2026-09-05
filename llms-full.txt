@@ -172,18 +172,45 @@ which components are present and unretired and by the dependency graph, not by t
 
 ## 6. Why a TypeScript developer should care
 
-Plugin systems: Cordis is the meta-framework behind Koishi and its 4000-plus community plugins —
-install, uninstall and reconfigure live, without restarting the process. The API shown here is
-Cordis v4, the version the paper describes; Koishi currently ships on v3, which shares the
-compositional model but differs in the effect and coeffect semantics and in the loader.
+Self-modifying agent harnesses. A harness is the runtime around a model: it composes tool suites
+and execution environments, governs permissions and sandboxing, keeps session state, manages
+context and memory, and orchestrates subagents. The paper's forward-looking case is a harness that
+generates and deploys modifications to its own components while it is still serving requests —
+model-synthesised reusable tools being the narrow precursor already in use. Every one of those
+modifications is an instance of dynamic composition.
 
-Hot reload that cleans up: ordinary HMR swaps the module and leaves old listeners and registry
+Because they land continuously and with little or no human oversight, the usual fallback stops
+being viable. Without temporal composability each self-modification is a full process restart that
+discards everything process-local: caches, open connections, partial computations. Rebuilding that
+takes seconds to minutes. At self-modification frequency the unavailability accumulates, in-flight
+tasks are disrupted over and over, and a faulty self-modification can disable the very process you
+would need in order to recover from it.
+
+Without spatial composability the failure is quieter and arrives later. Every module has to notice
+for itself when a dependency appears, disappears or changes identity, and can only do so by ad hoc
+means. A naive code-replacement strategy breaks dependents silently, or introduces a circular
+dependency that surfaces at reload time rather than at the moment the change was made.
+
+Why restarting the process is not the answer. Operating systems already provide temporal
+composability, at the granularity of a process; container orchestrators already provide spatial
+composability, at the granularity of a service. That substitute is a large part of why the problem
+has attracted so little formal attention. It is not free: a restart discards accumulated state and
+takes seconds to minutes to rebuild, so staying available across one means running redundant
+replicas — paying in hardware for the inability to recover a single component. Container-level
+orchestration cannot express a dependency between two components sharing an address space, and
+pushes onto the network what could have been a local function call. Both mechanisms sit at the
+process and container boundary, while the systems built on them compose at a far finer grain.
+
+Plugin systems. Cordis (https://github.com/cordiverse) is the meta-framework behind Koishi
+(https://koishi.chat/en-US/) and its 4000-plus community plugins — install, uninstall and
+reconfigure live, without restarting the process. The API shown here is Cordis v4, the version the
+paper describes; Koishi currently ships on v3, which shares the compositional model but differs in
+the effect and coeffect semantics and in the loader.
+
+Hot reload that cleans up. Ordinary HMR swaps the module and leaves old listeners and registry
 entries behind. Effect tracking does that bookkeeping for the plugin author.
 
-Agent harnesses: if an agent rewrites its own tools and components at runtime, the runtime has to
-answer one question reliably — what did this component change, and how do I undo it?
-
-A pattern you can steal without the framework: make every effect return its inverse, keep them on a
+A pattern you can steal without the framework. Make every effect return its inverse, keep them on a
 stack, unwind in reverse. That is the entire temporal mechanism.
 
 ## Limitations
