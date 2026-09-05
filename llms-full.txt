@@ -64,6 +64,7 @@ a single call; the effect returns its own inverse and the runtime keeps it:
 The entire temporal mechanism, stripped of ergonomics, is a stack of functions:
 
     type Dispose = () => void
+    interface Component { apply(ctx: Ctx): void }
 
     class Ctx {
       private phi: Dispose[] = []                     // φ — accumulated inverses
@@ -71,11 +72,19 @@ The entire temporal mechanism, stripped of ergonomics, is a stack of functions:
       private watchers = new Map<string, Set<Dispose>>()
       constructor(private bus: EventTarget) {}
 
-      /** track(f, g): run the effect, keep the inverse it hands back */
+      /** track(f, g): run the effect, keep the inverse — and hand it back, armed once */
       effect(f: () => Dispose): Dispose {
         const g = f()
-        this.phi.push(g)
-        return g
+        let armed = true
+        const dispose: Dispose = () => {
+          if (!armed) return                      // an inverse must fire at most once
+          armed = false
+          const i = this.phi.indexOf(dispose)
+          if (i >= 0) this.phi.splice(i, 1)       // leave φ, so recover cannot repeat it
+          g()
+        }
+        this.phi.push(dispose)
+        return dispose
       }
 
       /** providing a service is itself a revertible effect */
@@ -99,6 +108,15 @@ The entire temporal mechanism, stripped of ergonomics, is a stack of functions:
         })
       }
 
+      /** instantiating a component is not a new mechanism — it is one more effect */
+      use(component: Component): Dispose {
+        return this.effect(() => {
+          const child = new Ctx(this.bus)
+          component.apply(child)
+          return () => child.recover()            // the child's whole stack, as one inverse
+        })
+      }
+
       /** recover: φ(γ) — inverses in reverse order */
       recover(): void { while (this.phi.length) this.phi.pop()!() }
 
@@ -107,8 +125,20 @@ The entire temporal mechanism, stripped of ergonomics, is a stack of functions:
       }
     }
 
-Note that set and on never touch the stack themselves — both are built on effect, because every
-context-mutating operation reduces to a ctx.effect call.
+Note that set, on and use never touch the stack themselves — all three are built on effect, because
+every context-mutating operation reduces to a ctx.effect call.
+
+Every method hands back the inverse it registered, so one effect can be withdrawn on its own without
+disturbing the rest. The disposer disarms itself and leaves φ on the way out — firing an inverse
+twice would apply it at a state no application of the effect ever produced.
+
+Taking down a whole component is not a matter of reaching into the stack for its entries. recover is
+all-or-nothing, which the paper names as one of the two limitations of the bare track/recover model
+and is why the calculus moves on to effect functions and iterators. What gives you per-component
+teardown instead is nesting: each fiber runs in its own context with its own φ, and installing a
+component on a parent is a single effect whose inverse drains the child's entire stack. That is why
+use needs no machinery of its own — a component is not a new kind of thing, it is an effect that
+happens to own a context.
 
 The paper goes further and models activation as an effect iterator: each step yields a state change,
 its inverse and a continuation. That is what makes a half-finished activation revertible, not just a

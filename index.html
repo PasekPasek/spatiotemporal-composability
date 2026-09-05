@@ -372,9 +372,10 @@
 }</pre>
 
   <h3>The whole temporal idea, in one class</h3>
-  <p>Strip away the ergonomics and the mechanism is a stack of functions. Note that <code>set</code> and <code>on</code> never touch that stack themselves — both are built on <code>effect</code>, because every context-mutating operation reduces to a <code>ctx.effect</code> call:</p>
+  <p>Strip away the ergonomics and the mechanism is a stack of functions. Note that <code>set</code>, <code>on</code> and <code>use</code> never touch that stack themselves — all three are built on <code>effect</code>, because every context-mutating operation reduces to a <code>ctx.effect</code> call:</p>
 
   <pre><span class="c-key">type</span> <span class="c-typ">Dispose</span> = () =&gt; <span class="c-key">void</span>
+<span class="c-key">interface</span> <span class="c-typ">Component</span> { <span class="c-fn">apply</span>(ctx: <span class="c-typ">Ctx</span>): <span class="c-key">void</span> }
 
 <span class="c-key">class</span> <span class="c-typ">Ctx</span> {
   <span class="c-key">private</span> phi: <span class="c-typ">Dispose</span>[] = []                      <span class="c-com">// φ — accumulated inverses</span>
@@ -382,11 +383,19 @@
   <span class="c-key">private</span> watchers = <span class="c-key">new</span> <span class="c-typ">Map</span>&lt;<span class="c-key">string</span>, <span class="c-typ">Set</span>&lt;<span class="c-typ">Dispose</span>&gt;&gt;()
   <span class="c-fn">constructor</span>(<span class="c-key">private</span> bus: <span class="c-typ">EventTarget</span>) {}
 
-  <span class="c-com">/** track(f, g): run the effect, keep the inverse it hands back */</span>
+  <span class="c-com">/** track(f, g): run the effect, keep the inverse — and hand it back, armed once */</span>
   <span class="c-fn">effect</span>(f: () =&gt; <span class="c-typ">Dispose</span>): <span class="c-typ">Dispose</span> {
     <span class="c-key">const</span> g = <span class="c-fn">f</span>()
-    <span class="c-key">this</span>.phi.<span class="c-fn">push</span>(g)
-    <span class="c-key">return</span> g
+    <span class="c-key">let</span> armed = <span class="c-key">true</span>
+    <span class="c-key">const</span> dispose: <span class="c-typ">Dispose</span> = () =&gt; {
+      <span class="c-key">if</span> (!armed) <span class="c-key">return</span>                      <span class="c-com">// an inverse must fire at most once</span>
+      armed = <span class="c-key">false</span>
+      <span class="c-key">const</span> i = <span class="c-key">this</span>.phi.<span class="c-fn">indexOf</span>(dispose)
+      <span class="c-key">if</span> (i &gt;= 0) <span class="c-key">this</span>.phi.<span class="c-fn">splice</span>(i, 1)         <span class="c-com">// leave φ, so recover cannot repeat it</span>
+      <span class="c-fn">g</span>()
+    }
+    <span class="c-key">this</span>.phi.<span class="c-fn">push</span>(dispose)
+    <span class="c-key">return</span> dispose
   }
 
   <span class="c-com">/** providing a service is itself a revertible effect */</span>
@@ -410,6 +419,15 @@
     })
   }
 
+  <span class="c-com">/** instantiating a component is not a new mechanism — it is one more effect */</span>
+  <span class="c-fn">use</span>(component: <span class="c-typ">Component</span>): <span class="c-typ">Dispose</span> {
+    <span class="c-key">return</span> <span class="c-key">this</span>.<span class="c-fn">effect</span>(() =&gt; {
+      <span class="c-key">const</span> child = <span class="c-key">new</span> <span class="c-typ">Ctx</span>(<span class="c-key">this</span>.bus)
+      component.<span class="c-fn">apply</span>(child)
+      <span class="c-key">return</span> () =&gt; child.<span class="c-fn">recover</span>()             <span class="c-com">// the child's whole stack, as one inverse</span>
+    })
+  }
+
   <span class="c-com">/** recover: φ(γ) — inverses in reverse order */</span>
   <span class="c-fn">recover</span>(): <span class="c-key">void</span> { <span class="c-key">while</span> (<span class="c-key">this</span>.phi.length) <span class="c-key">this</span>.phi.<span class="c-fn">pop</span>()!() }
 
@@ -417,6 +435,10 @@
     <span class="c-key">this</span>.watchers.<span class="c-fn">get</span>(key)?.<span class="c-fn">forEach</span>(fn =&gt; <span class="c-fn">fn</span>())
   }
 }</pre>
+
+  <p>Every method hands back the inverse it registered, so one effect can be withdrawn on its own without disturbing the rest. The disposer disarms itself and leaves φ on the way out — firing an inverse twice would apply it at a state no application of the effect ever produced, and nothing would then hold it to reverting anything.</p>
+
+  <p>Taking down a whole <em>component</em> is not a matter of reaching into the stack for its entries. <code>recover</code> is all-or-nothing, which the paper names as one of the two limitations of the bare track/recover model and is why the calculus moves on to effect functions and iterators. What gives you per-component teardown instead is nesting: each fiber runs in its own context with its own φ, and installing a component on a parent is a single effect whose inverse drains the child's entire stack. That is why <code>use</code> above needs no machinery of its own — a component is not a new kind of thing, it is an effect that happens to own a context.</p>
 
   <small>The paper goes further and models activation as an <em>effect iterator</em>: each step yields a state change, its inverse and a continuation. That is what makes a half-finished activation revertible, not just a completed one.</small>
 </section>
