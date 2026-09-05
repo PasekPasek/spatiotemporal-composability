@@ -66,27 +66,49 @@ The entire temporal mechanism, stripped of ergonomics, is a stack of functions:
     type Dispose = () => void
 
     class Ctx {
-      private phi: Dispose[] = []                     // accumulated inverses
-      private sigma = new Map<string, unknown>()      // coeffect context
+      private phi: Dispose[] = []                     // φ — accumulated inverses
+      private sigma = new Map<string, unknown>()      // Σ — coeffect context
+      private watchers = new Map<string, Set<Dispose>>()
+      constructor(private bus: EventTarget) {}
 
-      effect<T>(f: () => [T, Dispose]): T {
-        const [value, g] = f()
+      /** track(f, g): run the effect, keep the inverse it hands back */
+      effect(f: () => Dispose): Dispose {
+        const g = f()
         this.phi.push(g)
-        return value
+        return g
       }
 
-      set(key: string, value: unknown) {
-        const prev = this.sigma.get(key)
-        this.sigma.set(key, value)
-        this.notify(key)
-        this.phi.push(() => {
-          prev === undefined ? this.sigma.delete(key) : this.sigma.set(key, prev)
+      /** providing a service is itself a revertible effect */
+      set(key: string, value: unknown): Dispose {
+        return this.effect(() => {
+          const had = this.sigma.has(key), prev = this.sigma.get(key)
+          this.sigma.set(key, value)
           this.notify(key)
+          return () => {
+            had ? this.sigma.set(key, prev) : this.sigma.delete(key)
+            this.notify(key)
+          }
         })
       }
 
-      recover() { while (this.phi.length) this.phi.pop()!() }
+      /** a tracked context API: the caller never writes this inverse */
+      on(event: string, fn: () => void): Dispose {
+        return this.effect(() => {
+          this.bus.addEventListener(event, fn)
+          return () => this.bus.removeEventListener(event, fn)
+        })
+      }
+
+      /** recover: φ(γ) — inverses in reverse order */
+      recover(): void { while (this.phi.length) this.phi.pop()!() }
+
+      private notify(key: string): void {
+        this.watchers.get(key)?.forEach(fn => fn())
+      }
     }
+
+Note that set and on never touch the stack themselves — both are built on effect, because every
+context-mutating operation reduces to a ctx.effect call.
 
 The paper goes further and models activation as an effect iterator: each step yields a state change,
 its inverse and a continuation. That is what makes a half-finished activation revertible, not just a

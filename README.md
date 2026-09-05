@@ -10,7 +10,7 @@ A single-page, dependency-free interactive explainer for **revertible effects** 
 - **track / recover.** Step through effects being applied and unwound, one inverse at a time, in the correct reverse order.
 - **The fiber lifecycle.** All nine rules of the calculus over Inactive → Reloading → Active → Unloading (plus the empty node), including `L-Divert` — what happens when a dependency changes halfway through activation — and the retire/remove split that stops an Active fiber from being dropped with its accumulator still full.
 - **Confluence.** Two different operation histories, same final configuration, with the theorem's actual hypotheses spelled out.
-- **TypeScript throughout**, including a ~30-line `Ctx` class that contains the entire temporal mechanism.
+- **TypeScript throughout**, including a ~40-line `Ctx` class that contains the entire temporal mechanism and typechecks under `tsc --strict` against the usage shown beside it.
 
 ## Running it
 
