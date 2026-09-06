@@ -16,6 +16,13 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Spatiotemporal Composability, Explained Interactively">
 <meta name="twitter:description" content="Revertible effects and reactive coeffects, in a live sandbox.">
+<meta property="og:image" content="https://pasekpasek.github.io/spatiotemporal-composability/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The component lifecycle: Inactive, Reloading, Active and Unloading, with the nine rules of the calculus on its edges.">
+<meta name="twitter:image" content="https://pasekpasek.github.io/spatiotemporal-composability/og.png">
+<meta name="theme-color" content="#1A2028">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 
 <script type="application/ld+json">
 {
@@ -50,7 +57,7 @@
     --live:#F0A94C; --stored:#7FA7C4; --warn:#C98A44;
     --idle-line:#3A4552; --idle-ink:#93A0AD; --fail:#C4705E;
     /* syntax */
-    --c-key:#C79BDF; --c-str:#83C79A; --c-com:#697887; --c-fn:#8FB8E8; --c-typ:#DFAF72;
+    --c-key:#C79BDF; --c-str:#83C79A; --c-com:#8C99A6; --c-fn:#8FB8E8; --c-typ:#DFAF72;
     --r:2px;
   }
   *{box-sizing:border-box}
@@ -233,6 +240,11 @@
       animation:draw 1.25s cubic-bezier(.6,.05,.25,1) forwards}
   }
   @keyframes draw{to{stroke-dashoffset:0}}
+  @media (pointer:coarse){
+    button{min-height:44px;padding-top:11px;padding-bottom:11px}
+    button.mini{min-height:40px}
+  }
+
   @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
 </style>
 </head>
@@ -271,6 +283,7 @@
   </div>
 </header>
 
+<main>
 <section id="axes">
   <div class="sec-head"><span class="sec-num">01</span>
     <div><h2>Two orthogonal axes</h2>
@@ -306,7 +319,7 @@
     <div class="sandbox">
       <div>
         <h4>Components</h4>
-        <div id="s-fibers"></div>
+        <div id="s-fibers" aria-live="polite"></div>
         <div class="controls">
           <button class="ghost mini" id="s-all">Install all</button>
           <button class="ghost mini" id="s-none">Remove all</button>
@@ -315,15 +328,15 @@
       <div>
         <div class="pane" style="margin-bottom:14px">
           <h4>Σ — service table</h4>
-          <ul class="rows" id="s-services"></ul>
+          <ul class="rows" id="s-services" aria-live="polite"></ul>
         </div>
         <div class="pane">
           <h4>φ — inverse stack (top first)</h4>
-          <ul class="rows" id="s-stack"></ul>
+          <ul class="rows" id="s-stack" aria-live="polite"></ul>
         </div>
       </div>
     </div>
-    <ul class="log" id="s-log"></ul>
+    <ul class="log" id="s-log" aria-live="polite" aria-atomic="false"></ul>
   </div>
 
   <p>Two things are worth noticing. Removing <code>database</code> takes <code>auth</code> and <code>commands</code> down with it, deepest dependent first — nobody wrote that teardown order, it falls out of the resolution. And the inverse stack empties exactly as far as it filled: no entry survives its owner.</p>
@@ -361,7 +374,7 @@
       <button id="a-recover">recover all</button>
       <button id="a-reset" class="ghost">reset</button>
     </div>
-    <p class="hint" id="a-hint">Apply a few effects, then step back through them one at a time.</p>
+    <p class="hint" id="a-hint" aria-live="polite">Apply a few effects, then step back through them one at a time.</p>
   </div>
 
   <p>In <a href="https://github.com/cordiverse">Cordis</a>, the TypeScript reference implementation, this collapses into a single call. The effect returns its own inverse and the runtime keeps it:</p>
@@ -502,7 +515,7 @@
       <button id="c-divert">Dependency changes mid-activation</button>
       <button id="c-remove">Retire and remove</button>
     </div>
-    <ul class="log" id="c-log"></ul>
+    <ul class="log" id="c-log" aria-live="polite" aria-atomic="false"></ul>
   </div>
 
   <p><code>L-Divert</code> is the safety rule. If a dependency changes while a component is still activating, the fiber is diverted straight to unloading rather than finishing against a stale environment. The effects it already applied are in the accumulator, so the rollback is complete even though the activation was not. It has two forms: one lands the iteration in flight and keeps its inverse, the other aborts it — routing through <em>Unloading</em> rather than <em>Active</em> is what stops a fiber from provisioning its coeffects for the length of one more step.</p>
@@ -561,7 +574,7 @@
       <button id="d-shuffle" class="ghost">Give B a different history</button>
       <button id="d-reset" class="ghost">reset</button>
     </div>
-    <div class="verdict" id="d-verdict" hidden></div>
+    <div class="verdict" id="d-verdict" role="status" hidden></div>
   </div>
 </section>
 
@@ -599,13 +612,15 @@
     <div class="sandbox">
       <div>
         <h4>Harness</h4>
-        <div id="e-fibers"></div>
+        <div id="e-fibers" aria-live="polite"></div>
       </div>
       <div>
         <div class="pane">
           <h4>Meanwhile, it is serving</h4>
           <ul class="rows" id="e-metrics"></ul>
         </div>
+        <small style="margin-top:12px">A redeploy leaves the cache where it was; a restart takes it
+        to nothing and it climbs back from cold. That gap, not the seconds, is the argument.</small>
       </div>
     </div>
     <div class="controls">
@@ -614,7 +629,7 @@
       <button id="e-restart" class="ghost">Restart the process instead</button>
       <button id="e-reset" class="ghost">reset</button>
     </div>
-    <ul class="log" id="e-log"></ul>
+    <ul class="log" id="e-log" aria-live="polite" aria-atomic="false"></ul>
   </div>
 
   <h3>Where the discipline stops</h3>
@@ -624,6 +639,7 @@
 
   <p>On hostile code the paper is more specific than "no defence". Declared <code>inject</code> plus context interception already amount to capability-style access control over proxy-mediated dependencies: an undeclared access throws, the full set of requests is known before the component runs, and an orchestrator can attenuate any component's access without touching the provider. But language-level checks are moot against code that can reach the host runtime directly, so genuinely untrusted components need an execution boundary beyond the language — a sandboxed process, a separate runtime, a container — with the bridge showing up on the host side as an ordinary fiber whose capabilities can be attenuated the same way.</p>
 </section>
+</main>
 
 <footer>
   <p>Based on <a href="https://arxiv.org/abs/2608.25512">A Programming Paradigm for Spatiotemporal Composability</a> by Yifan Shi, Wei Zhang and Tianyi Cui (arXiv:2608.25512, cs.PL, August 2026). Reference implementation: <a href="https://github.com/cordiverse">Cordis</a>.</p>
