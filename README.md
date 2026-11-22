@@ -13,6 +13,10 @@ A single-page, dependency-free interactive explainer for **revertible effects** 
 - **A harness on the bench.** The closing demo runs the whole thing at once: a self-modifying harness redeploying its own tool suite while serving, a build that raises mid-activation and is held failed rather than retried, and the cost of restarting the process instead.
 - **TypeScript throughout**, including a ~60-line `Ctx` class that contains the entire temporal mechanism — including `use`, where instantiating a component turns out to be one more tracked effect — and typechecks under `tsc --strict` against the usage shown beside it.
 
+## Reading it
+
+The main path is written in short, plain sentences: the conclusion first, then the problem, then one mechanism per section. The formal detail — the exact premises of each rule, the hypotheses of the theorems, the notation — sits in collapsed *Going deeper* blocks, verbatim, so nothing the paper says was lost to the rewrite. Every sandbox log reads top to bottom in the order things happen, grouped by the action you took, with the rule of the calculus as a tag on the right. A glossary closes the page.
+
 ## Running it
 
 It's one file with no build step.

@@ -91,7 +91,7 @@
   /* ---- hero: the blueprint on the bench ---- */
   header{padding:78px 0 6px}
   .bench{display:flex;gap:36px;align-items:center;margin-top:38px;flex-wrap:wrap}
-  .bench .toc{margin:0;flex:0 0 auto}
+  .bench .toc{margin:0;flex:0 1 auto;min-width:0}
   .bp{flex:1 1 300px;min-width:260px;max-width:460px;margin-right:-40px;
       pointer-events:none;opacity:.6}
   @media (max-width:640px){.bp{display:none}}
@@ -264,6 +264,34 @@
     button.mini{min-height:40px}
   }
 
+
+  /* ---- v2: reading aids ---- */
+  h4 .sym{float:right;color:var(--idle-ink);letter-spacing:0;font-size:12px}
+  ol.plain{margin:0 0 16px;padding-left:22px;max-width:66ch}
+  ol.plain li{margin-bottom:9px}
+  details.deep{margin:22px 0 8px;border:1px solid var(--etch);border-radius:var(--r);
+    padding:0 16px;background:#161C22}
+  details.deep summary{cursor:pointer;padding:12px 0;font-family:"IBM Plex Mono",monospace;
+    font-size:13px;color:var(--ink-dim)}
+  details.deep summary:hover{color:var(--live)}
+  details.deep[open]{padding-bottom:6px}
+  details.deep p{font-size:15.5px}
+  dl.gloss{margin:0;max-width:66ch}
+  dl.gloss dt{font-family:"IBM Plex Mono",monospace;font-size:13.5px;color:var(--ink);margin-top:14px}
+  dl.gloss dd{margin:2px 0 0 0;color:var(--ink-dim);font-size:15.5px}
+  dl.gloss dt:target,dl.gloss dt:target+dd{color:var(--live)}
+  .log-head{margin:18px 0 0;padding-top:12px;border-top:1px solid var(--etch)}
+  .log{max-height:300px;overflow-y:auto;border-top:0;margin-top:6px;padding-top:0}
+  .log li{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+  .log li .tag{flex:none;font-size:11px;color:var(--live);opacity:.75}
+  .log li.act{display:block;color:var(--ink);margin-top:10px}
+  .log li.act:first-child{margin-top:0}
+  .log li.act::before{content:"\25B8  ";color:var(--live)}
+  .log li.sub{padding-left:16px}
+  .log li.aside{font-style:italic}
+  .fiber.wait{border-style:dashed;border-color:rgba(201,138,68,.45);background:var(--riser);box-shadow:none}
+  .rows li.popping{background:#2A3440;border-color:var(--stored);opacity:.55}
+
   @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
 </style>
 </head>
@@ -273,16 +301,19 @@
 <header>
   <p class="kicker">A walkthrough of arXiv:2608.25512 (Shi, Zhang and Cui, 2026)</p>
   <h1>Spatiotemporal composability</h1>
-  <p class="lead">You disable a plugin in your editor and it asks you to restart. Not because the code is still loaded, but because nobody knows what that plugin changed. This is a runtime that knows — and this page lets you operate it.</p>
-  <p class="muted">Five sandboxes. Four isolate one mechanism each; the last runs them together on a harness that rewrites itself while serving. Everything is live: install components, watch the inverse stack unwind, break a dependency mid-activation and see what the runtime does about it.</p>
+  <p class="lead">You disable a plugin in your editor and it asks you to restart. The code is gone, but nobody knows what that plugin changed. This page shows a runtime that does know.</p>
+  <p class="lead">The idea fits in two rules. <strong>Every change a component makes returns its own undo, and the runtime keeps those undos on a stack.</strong> <strong>Every component declares what it needs, and the runtime starts or stops it as those needs appear and disappear.</strong> With both, you can add, replace and remove parts of a running program, and nothing leaks.</p>
+  <p class="muted">Five live sandboxes follow. Each one isolates one mechanism. The last one runs them all on an agent harness that redeploys its own tools while it serves requests.</p>
   <div class="bench">
   <ul class="toc">
-    <li><a href="#axes">01 &nbsp; Two orthogonal axes</a></li>
-    <li><a href="#sandbox">02 &nbsp; The runtime, hands on</a></li>
-    <li><a href="#effects">03 &nbsp; Revertible effects: track and recover</a></li>
-    <li><a href="#fiber">04 &nbsp; Fiber lifecycle</a></li>
-    <li><a href="#guarantees">05 &nbsp; What you get in return</a></li>
-    <li><a href="#practice">06 &nbsp; Why a TypeScript developer should care</a></li>
+    <li><a href="#problem">01 &nbsp; The problem</a></li>
+    <li><a href="#effects">02 &nbsp; Every change returns its undo</a></li>
+    <li><a href="#sandbox">03 &nbsp; Dependencies that can disappear</a></li>
+    <li><a href="#fiber">04 &nbsp; The lifecycle of one component</a></li>
+    <li><a href="#guarantees">05 &nbsp; What the runtime guarantees</a></li>
+    <li><a href="#practice">06 &nbsp; A harness that rewrites itself</a></li>
+    <li><a href="#limits">07 &nbsp; Where it stops</a></li>
+    <li><a href="#glossary">&nbsp;&nbsp;&nbsp; &nbsp; Glossary</a></li>
   </ul>
   <svg class="bp" viewBox="0 0 600 272" aria-hidden="true" focusable="false">
     <circle class="fill" cx="30" cy="133" r="13" style="--len:82;animation-delay:.05s"/>
@@ -303,133 +334,91 @@
 </header>
 
 <main>
-<section id="axes">
+<section id="problem">
   <div class="sec-head"><span class="sec-num">01</span>
-    <div><h2>Two orthogonal axes</h2>
-      <p class="muted" style="margin:6px 0 0">Time and space, each with its own mechanism.</p></div>
+    <div><h2>The problem</h2>
+      <p class="muted" style="margin:6px 0 0">Plugin code changes things and forgets how to change them back.</p></div>
   </div>
 
-  <p><strong>Time.</strong> Removing a component has to undo everything it did. The mechanism is <strong>revertible effects</strong>: every transformation of the context carries its own inverse, and the runtime holds onto it.</p>
+  <p>Here is an ordinary plugin. It makes three changes to the program around it:</p>
 
-  <p><strong>Space.</strong> A component declares what it needs from its environment, and the runtime manages that reactively. The mechanism is <strong>reactive coeffects</strong>: every change to the context is classified against a component's declaration and drives its activation or deactivation.</p>
-
-  <p>An effect is what a component <em>does</em> to its environment. A coeffect is what it <em>requires</em> from it — the dual notion, familiar from static analysis, lifted here into a runtime mechanism. Ordinary plugin code has neither property:</p>
-
-  <pre><span class="c-com">// the author has to remember the inverse of every line — and never does</span>
-<span class="c-key">export function</span> <span class="c-fn">apply</span>(bus: <span class="c-typ">Bus</span>, services: <span class="c-typ">Registry</span>) {
+  <pre><span class="c-key">export function</span> <span class="c-fn">apply</span>(bus: <span class="c-typ">Bus</span>, services: <span class="c-typ">Registry</span>) {
   bus.<span class="c-fn">on</span>(<span class="c-str">'message'</span>, onMessage)
   <span class="c-key">const</span> timer = <span class="c-fn">setInterval</span>(poll, <span class="c-str">1000</span>)
   services.db = <span class="c-key">new</span> <span class="c-typ">Database</span>()
-  <span class="c-com">// dispose()? in practice: a leaked listener, a zombie timer, a dead registry entry</span>
 }</pre>
 
-  <p>The paper's own move is to unify the two axes rather than bolt them together: the effect context and the coeffect context collapse into a single context type, and every effect and every coeffect is mediated through it. That discipline is what it calls the <strong>context paradigm</strong>, and the mediation is what induces the observational equivalence up to which two components' effects interleave without disturbing one another.</p>
-</section>
+  <p>To remove it cleanly, someone must write a <code>dispose()</code> that undoes all three. In practice nobody keeps it in step. You get a leaked listener, a timer that never stops and a dead entry in the registry. A restart is the only safe cleanup.</p>
 
-<section id="sandbox">
-  <div class="sec-head"><span class="sec-num">02</span>
-    <div><h2>The runtime, hands on</h2>
-      <p class="muted" style="margin:6px 0 0">Four components, one context. Install and remove them in any order.</p></div>
-  </div>
+  <p>The paper splits the problem along two axes:</p>
+  <ul class="plain">
+    <li><strong>Time.</strong> Removing a component must undo everything it did. The mechanism is <a href="#g-effect"><strong>revertible effects</strong></a>: each change carries its own inverse, and the runtime holds on to it. Section 02.</li>
+    <li><strong>Space.</strong> A component declares what it needs from its environment. The mechanism is <a href="#g-coeffect"><strong>reactive coeffects</strong></a>: the runtime watches those needs and starts or stops the component as they change. Section 03.</li>
+  </ul>
 
-  <p>Each component declares what it injects and what it provides. The left column is the system; the right is the context it shares — the service table Σ and the accumulated inverse stack φ. Try removing <code>database</code> while everything is running.</p>
+  <p>An effect is what a component <em>does</em> to its environment. A coeffect is what it <em>needs</em> from it. Both go through one shared object, the <a href="#g-context">context</a>. The paper calls this discipline the <strong>context paradigm</strong>.</p>
 
-  <div class="demo">
-    <div class="sandbox">
-      <div>
-        <h4>Components</h4>
-        <div id="s-fibers" aria-live="polite"></div>
-        <div class="controls">
-          <button class="ghost mini" id="s-all">Install all</button>
-          <button class="ghost mini" id="s-none">Remove all</button>
-        </div>
-      </div>
-      <div>
-        <div class="pane" style="margin-bottom:14px">
-          <h4>Σ — service table</h4>
-          <ul class="rows" id="s-services" aria-live="polite"></ul>
-        </div>
-        <div class="pane">
-          <h4>φ — inverse stack (top first)</h4>
-          <ul class="rows" id="s-stack" aria-live="polite"></ul>
-        </div>
-      </div>
-    </div>
-    <ul class="log" id="s-log" aria-live="polite" aria-atomic="false"></ul>
-  </div>
-
-  <p>Two things are worth noticing. Removing <code>database</code> takes <code>auth</code> and <code>commands</code> down with it, deepest dependent first — nobody wrote that teardown order, it falls out of the resolution. And the inverse stack empties exactly as far as it filled: no entry survives its owner.</p>
-
-  <pre><span class="c-key">export const</span> name = <span class="c-str">'auth'</span>
-<span class="c-key">export const</span> inject = [<span class="c-str">'db'</span>] <span class="c-key">as const</span>
-
-<span class="c-key">export function</span> <span class="c-fn">apply</span>(ctx: <span class="c-typ">Context</span>&lt;{ db: <span class="c-typ">Database</span> }&gt;) {
-  <span class="c-com">// ctx.db is non-null for the entire lifetime of this fiber:</span>
-  <span class="c-com">// if db goes away, the fiber is torn down before it can observe undefined</span>
-  ctx.<span class="c-fn">set</span>(<span class="c-str">'auth'</span>, <span class="c-key">new</span> <span class="c-typ">Auth</span>(ctx.db))
-}</pre>
-
-  <p>This is the part classical dependency injection does not do. A container injects once, at construction. Here the binding is live, it can be withdrawn, and withdrawal is handled as carefully as provision.</p>
+  <details class="deep">
+    <summary>Going deeper: the context paradigm</summary>
+    <p>A coeffect is the dual of an effect — the dual notion, familiar from static analysis, lifted here into a runtime mechanism.</p>
+    <p>The paper's own move is to unify the two axes rather than bolt them together: the effect context and the coeffect context collapse into a single context type, and every effect and every coeffect is mediated through it. That mediation is what induces the observational equivalence up to which two components' effects interleave without disturbing one another.</p>
+  </details>
 </section>
 
 <section id="effects">
-  <div class="sec-head"><span class="sec-num">03</span>
-    <div><h2>Revertible effects: track and recover</h2>
-      <p class="muted" style="margin:6px 0 0">The context stops being a state and becomes a state plus an accumulator.</p></div>
+  <div class="sec-head"><span class="sec-num">02</span>
+    <div><h2>Every change returns its undo</h2>
+      <p class="muted" style="margin:6px 0 0">The context keeps its state and, next to it, a stack of inverses.</p></div>
   </div>
 
-  <p>An ordinary context Γ is lifted to a revertible one, <code>∂Γ = Γ × (Γ → Γ)</code>: the current state γ together with φ, the composition of the inverses of every effect applied so far.</p>
+  <p>Two operations do all the work. <code>track(f, g)</code> applies the change <code>f</code> and pushes its inverse <code>g</code> onto the stack. <code>recover</code> pops the inverses and runs them, newest first. Order matters: you undo the last change first, like any stack.</p>
 
-  <p><code>track(f, g)</code> applies f to the state and appends g to the accumulator. <code>recover</code> applies the accumulator. Order is the whole game — inverses come off in reverse, like a stack.</p>
+  <p>Try it. Apply a few changes, then undo them one at a time. Each undo removes the matching line on the left.</p>
 
   <div class="demo" id="demoA">
     <div class="panes">
-      <div class="pane"><h4>γ — context state</h4><ul class="rows" id="a-state"></ul></div>
-      <div class="pane"><h4>φ — accumulated inverses</h4><ul class="rows" id="a-stack"></ul></div>
+      <div class="pane"><h4>State now <span class="sym">γ</span></h4><ul class="rows" id="a-state"></ul></div>
+      <div class="pane"><h4>Undo stack, newest on top <span class="sym">φ</span></h4><ul class="rows" id="a-stack"></ul></div>
     </div>
     <div class="controls">
-      <button id="a-track">track — apply next effect</button>
-      <button id="a-step">recover one step</button>
-      <button id="a-recover">recover all</button>
+      <button id="a-track">Apply next change</button>
+      <button id="a-step">Undo one</button>
+      <button id="a-recover">Undo all</button>
       <button id="a-reset" class="ghost">reset</button>
     </div>
-    <p class="hint" id="a-hint" aria-live="polite">Apply a few effects, then step back through them one at a time.</p>
+    <p class="hint" id="a-hint" aria-live="polite">Apply a few changes, then undo them one at a time.</p>
   </div>
 
-  <p>In <a href="https://github.com/cordiverse">Cordis</a>, the TypeScript reference implementation, this collapses into a single call. The effect returns its own inverse and the runtime keeps it:</p>
+  <p>In <a href="https://github.com/cordiverse">Cordis</a>, the TypeScript reference implementation, a component writes the change and its inverse in one place. The context APIs already know their own inverses:</p>
 
   <pre><span class="c-key">export function</span> <span class="c-fn">apply</span>(ctx: <span class="c-typ">Context</span>) {
-  <span class="c-com">// explicit effect: forward and inverse in one place</span>
+  <span class="c-com">// an explicit effect: the change and its inverse together</span>
   ctx.<span class="c-fn">effect</span>(() => {
     <span class="c-key">const</span> timer = <span class="c-fn">setInterval</span>(poll, <span class="c-str">1000</span>)
     <span class="c-key">return</span> () => <span class="c-fn">clearInterval</span>(timer)
   })
 
-  <span class="c-com">// context APIs are tracked already — the inverse is derived for you</span>
+  <span class="c-com">// context APIs are tracked already: the runtime derives the inverse</span>
   ctx.<span class="c-fn">on</span>(<span class="c-str">'message'</span>, onMessage)
   ctx.<span class="c-fn">set</span>(<span class="c-str">'db'</span>, <span class="c-key">new</span> <span class="c-typ">Database</span>())
 }</pre>
 
-  <h3>The whole temporal idea, in one class</h3>
-  <p>Strip away the ergonomics and the mechanism is a stack of functions. Note that <code>set</code>, <code>on</code> and <code>use</code> never touch that stack themselves — all three are built on <code>effect</code>, because every context-mutating operation reduces to a <code>ctx.effect</code> call:</p>
+  <h3>The whole mechanism, in one class</h3>
+  <p>Without the ergonomics, the mechanism is a stack of functions. <code>set</code>, <code>on</code> and <code>use</code> never touch the stack themselves. All three call <code>effect</code>:</p>
 
   <pre><span class="c-key">type</span> <span class="c-typ">Dispose</span> = () =&gt; <span class="c-key">void</span>
 <span class="c-key">interface</span> <span class="c-typ">Component</span> { <span class="c-fn">apply</span>(ctx: <span class="c-typ">Ctx</span>): <span class="c-key">void</span> }
 
 <span class="c-key">class</span> <span class="c-typ">Ctx</span> {
-  <span class="c-key">private</span> phi: <span class="c-typ">Dispose</span>[] = []                      <span class="c-com">// φ — accumulated inverses</span>
-  <span class="c-key">private</span> sigma = <span class="c-key">new</span> <span class="c-typ">Map</span>&lt;<span class="c-key">string</span>, <span class="c-key">unknown</span>&gt;()        <span class="c-com">// Σ — coeffect context</span>
+  <span class="c-key">private</span> phi: <span class="c-typ">Dispose</span>[] = []                      <span class="c-com">// φ: the undo stack</span>
+  <span class="c-key">private</span> sigma = <span class="c-key">new</span> <span class="c-typ">Map</span>&lt;<span class="c-key">string</span>, <span class="c-key">unknown</span>&gt;()        <span class="c-com">// Σ: the services provided</span>
   <span class="c-key">private</span> watchers = <span class="c-key">new</span> <span class="c-typ">Map</span>&lt;<span class="c-key">string</span>, <span class="c-typ">Set</span>&lt;<span class="c-typ">Dispose</span>&gt;&gt;()
   <span class="c-fn">constructor</span>(<span class="c-key">private</span> bus: <span class="c-typ">EventTarget</span>) {}
 
-  <span class="c-com">/** track(f, g): run the effect, keep the inverse, hand it back */</span>
+  <span class="c-com">/** track(f, g): run the change, keep the inverse, hand it back */</span>
   <span class="c-fn">effect</span>(f: () =&gt; <span class="c-typ">Dispose</span>): <span class="c-typ">Dispose</span> {
     <span class="c-key">const</span> g = <span class="c-fn">f</span>()
-    <span class="c-com">// set once, here at registration — but the closure below runs later, and may run</span>
-    <span class="c-com">// more than once: the caller holds it and recover() reaches it too. The first call</span>
-    <span class="c-com">// spends it, every later one is a no-op. Cordis calls this the armed flag; applying</span>
-    <span class="c-com">// an inverse twice would meet a state no application of the effect ever produced.</span>
-    <span class="c-key">let</span> armed = <span class="c-key">true</span>
+    <span class="c-key">let</span> armed = <span class="c-key">true</span>                                <span class="c-com">// an inverse runs at most once</span>
     <span class="c-key">const</span> dispose: <span class="c-typ">Dispose</span> = () =&gt; { <span class="c-key">if</span> (armed) { armed = <span class="c-key">false</span>; <span class="c-fn">g</span>() } }
     <span class="c-key">this</span>.phi.<span class="c-fn">push</span>(dispose)
     <span class="c-key">return</span> dispose
@@ -456,7 +445,7 @@
     })
   }
 
-  <span class="c-com">/** instantiating a component is not a new mechanism — it is one more effect */</span>
+  <span class="c-com">/** starting a component is not a new mechanism: it is one more effect */</span>
   <span class="c-fn">use</span>(component: <span class="c-typ">Component</span>): <span class="c-typ">Dispose</span> {
     <span class="c-key">return</span> <span class="c-key">this</span>.<span class="c-fn">effect</span>(() =&gt; {
       <span class="c-key">const</span> child = <span class="c-key">new</span> <span class="c-typ">Ctx</span>(<span class="c-key">this</span>.bus)
@@ -465,30 +454,92 @@
     })
   }
 
-  <span class="c-com">/** recover: φ(γ) — inverses in reverse order */</span>
+  <span class="c-com">/** recover: run the inverses, newest first */</span>
   <span class="c-fn">recover</span>(): <span class="c-key">void</span> { <span class="c-key">while</span> (<span class="c-key">this</span>.phi.length) <span class="c-key">this</span>.phi.<span class="c-fn">pop</span>()!() }
 
-  <span class="c-com">/** the coeffect side in outline only: nothing subscribes here, because reactive</span>
-      <span class="c-com">resolution — inject, target, the ¬relied guard — is the half this class omits */</span>
+  <span class="c-com">/** the dependency side, in outline only: section 03 covers it */</span>
   <span class="c-key">private</span> <span class="c-fn">notify</span>(key: <span class="c-key">string</span>): <span class="c-key">void</span> {
     <span class="c-key">this</span>.watchers.<span class="c-fn">get</span>(key)?.<span class="c-fn">forEach</span>(fn =&gt; <span class="c-fn">fn</span>())
   }
 }</pre>
 
-  <p>Every method hands back the inverse it registered, so one effect can be withdrawn on its own without disturbing the rest. The disposer disarms itself and leaves φ on the way out — firing an inverse twice would apply it at a state no application of the effect ever produced, and nothing would then hold it to reverting anything.</p>
+  <p>Three details matter:</p>
+  <ul class="plain">
+    <li><strong>Each method returns its inverse.</strong> You can withdraw one effect and leave the rest alone.</li>
+    <li><strong>An inverse runs at most once.</strong> Cordis calls this the armed flag. A second run would meet a state that the effect never produced.</li>
+    <li><strong>A component is an effect that owns a context.</strong> <code>use</code> gives each component its own child context and stack. The inverse of <code>use</code> drains that whole stack. This is how you remove one component without touching the others.</li>
+  </ul>
 
-  <p>Taking down a whole <em>component</em> is not a matter of reaching into the stack for its entries. <code>recover</code> is all-or-nothing, which the paper names as one of the two limitations of the bare track/recover model and is why the calculus moves on to effect functions and iterators. What gives you per-component teardown instead is nesting: each fiber runs in its own context with its own φ, and installing a component on a parent is a single effect whose inverse drains the child's entire stack. That is why <code>use</code> above needs no machinery of its own — a component is not a new kind of thing, it is an effect that happens to own a context.</p>
+  <details class="deep">
+    <summary>Going deeper: why the paper does not stop here</summary>
+    <p>An ordinary context Γ is lifted to a revertible one, <code>∂Γ = Γ × (Γ → Γ)</code>: the current state γ together with φ, the composition of the inverses of every effect applied so far.</p>
+    <p><code>recover</code> is all-or-nothing. The paper names this as one of the two limits of the bare track/recover model. That is why the calculus moves on to effect functions and iterators. Per-component teardown comes from nesting instead: each fiber runs in its own context with its own φ.</p>
+    <p>The paper models activation as an <em>effect iterator</em>: each step yields a state change, its inverse and a continuation. That is what makes a half-finished activation revertible, not just a completed one.</p>
+  </details>
+</section>
 
-  <small>The paper goes further and models activation as an <em>effect iterator</em>: each step yields a state change, its inverse and a continuation. That is what makes a half-finished activation revertible, not just a completed one.</small>
+<section id="sandbox">
+  <div class="sec-head"><span class="sec-num">03</span>
+    <div><h2>Dependencies that can disappear</h2>
+      <p class="muted" style="margin:6px 0 0">Four components share one context. Install and remove them in any order.</p></div>
+  </div>
+
+  <p>Each component declares what it <code>inject</code>s (needs) and what it provides. A component runs only while every service it needs is provided. On the right you see the context: the services provided now, and the undo stack.</p>
+
+  <p><strong>Try this:</strong> remove <code>database</code> while everything runs. Then install it again.</p>
+
+  <div class="demo">
+    <div class="sandbox">
+      <div>
+        <h4>Components</h4>
+        <div id="s-fibers" aria-live="polite"></div>
+        <div class="controls">
+          <button class="ghost mini" id="s-all">Install all</button>
+          <button class="ghost mini" id="s-none">Remove all</button>
+        </div>
+      </div>
+      <div>
+        <div class="pane" style="margin-bottom:14px">
+          <h4>Services provided <span class="sym">Σ</span></h4>
+          <ul class="rows" id="s-services" aria-live="polite"></ul>
+        </div>
+        <div class="pane">
+          <h4>Undo stack, newest on top <span class="sym">φ</span></h4>
+          <ul class="rows" id="s-stack" aria-live="polite"></ul>
+        </div>
+      </div>
+    </div>
+    <h4 class="log-head">What happened, in order</h4>
+    <ul class="log" id="s-log" aria-live="polite" aria-atomic="false"></ul>
+  </div>
+
+  <p>Two things to notice:</p>
+  <ul class="plain">
+    <li><strong>The teardown order is automatic.</strong> Removing <code>database</code> stops <code>commands</code> first, then <code>auth</code>, then <code>database</code>. Nobody wrote that order. It comes from the declared needs.</li>
+    <li><strong>The undo stack empties exactly as far as it filled.</strong> No entry outlives the component that made it.</li>
+  </ul>
+
+  <pre><span class="c-key">export const</span> name = <span class="c-str">'auth'</span>
+<span class="c-key">export const</span> inject = [<span class="c-str">'db'</span>] <span class="c-key">as const</span>
+
+<span class="c-key">export function</span> <span class="c-fn">apply</span>(ctx: <span class="c-typ">Context</span>&lt;{ db: <span class="c-typ">Database</span> }&gt;) {
+  <span class="c-com">// ctx.db is never undefined while this component runs:</span>
+  <span class="c-com">// if db goes away, the runtime stops auth first</span>
+  ctx.<span class="c-fn">set</span>(<span class="c-str">'auth'</span>, <span class="c-key">new</span> <span class="c-typ">Auth</span>(ctx.db))
+}</pre>
+
+  <p>Classical dependency injection does not do this. A container injects once, at construction. Here the binding is live. A provider can go away, and the runtime handles that as carefully as it handles a new one.</p>
 </section>
 
 <section id="fiber">
   <div class="sec-head"><span class="sec-num">04</span>
-    <div><h2>Fiber lifecycle</h2>
-      <p class="muted" style="margin:6px 0 0">A fiber is the runtime instance of a component: dependencies, provisions, effect iterator.</p></div>
+    <div><h2>The lifecycle of one component</h2>
+      <p class="muted" style="margin:6px 0 0">Four states, nine rules, and one rule that keeps activation safe.</p></div>
   </div>
 
-  <p>The calculus is nine rules over four lifecycle states, plus an empty node for a fiber absent from the registry. <code>O-</code> rules are actions the orchestrator <em>may</em> take: their premises say when the action is legal, not when it happens. <code>L-</code> rules are steps the system takes unprompted, whenever their premises hold. The paper's name for the loading state is <em>Reloading</em> — a fiber re-enters it on every reactivation, not only the first.</p>
+  <p>The runtime instance of a component is a <a href="#g-fiber">fiber</a>. A fiber moves between four states: <em>Inactive</em>, <em>Reloading</em> (starting up), <em>Active</em> and <em>Unloading</em>. The paper says <em>Reloading</em> because a fiber enters it on every restart, not only the first.</p>
+
+  <p>The rules come in two kinds. <code>O-</code> rules are what the <a href="#g-orchestrator">orchestrator</a> <em>may</em> do: insert or retire a fiber. <code>L-</code> rules are steps the runtime takes by itself, whenever their conditions hold. Press the buttons and follow the highlighted edge.</p>
 
   <div class="demo" id="demoC">
     <svg class="fsm" viewBox="0 0 600 272" role="img" aria-label="The component lifecycle: nine rules over four states plus an empty node for a fiber absent from the registry">
@@ -528,41 +579,42 @@
       <text x="192" y="184" text-anchor="middle" class="lbl">L-Unload</text>
       <text x="314" y="140" text-anchor="start"  class="lbl">L-Divert</text>
     </svg>
-    <small style="margin-top:10px">The ninth rule, <code>O-Retire</code>, only raises the retirement flag and applies at every state, so it would be a self-loop at all four nodes; the paper's figure omits it and so does this one.</small>
+    <small style="margin-top:10px">The ninth rule, <code>O-Retire</code>, only raises a retirement flag. It applies in every state, so it would be a loop on all four boxes. The paper's figure leaves it out, and so does this one.</small>
     <div class="controls">
       <button id="c-load">Insert and activate</button>
-      <button id="c-divert">Dependency changes mid-activation</button>
+      <button id="c-divert">Change a dependency mid-activation</button>
       <button id="c-remove">Retire and remove</button>
     </div>
+    <h4 class="log-head">What happened, in order</h4>
     <ul class="log" id="c-log" aria-live="polite" aria-atomic="false"></ul>
   </div>
 
-  <p><code>L-Divert</code> is the safety rule. If a dependency changes while a component is still activating, the fiber is diverted straight to unloading rather than finishing against a stale environment. The effects it already applied are in the accumulator, so the rollback is complete even though the activation was not. It has two forms: one lands the iteration in flight and keeps its inverse, the other aborts it — routing through <em>Unloading</em> rather than <em>Active</em> is what stops a fiber from provisioning its coeffects for the length of one more step.</p>
+  <p><strong><code>L-Divert</code> is the safety rule.</strong> Suppose a dependency changes while a fiber is still starting. The fiber does not finish against a stale environment. It goes straight to <em>Unloading</em>. The changes it already made are on its undo stack, so the rollback is complete although the activation was not.</p>
 
-  <h3>Why removal is two rules, not one</h3>
-  <p>Insertion and retirement are the orchestrator's only inputs; it never sets a lifecycle state directly. So <code>O-Retire</code> raises a flag and nothing more, and the lifecycle rules carry the request out — <code>L-Leave</code> down to <em>Unloading</em>, <code>L-Unload</code> back to <em>Inactive</em>, and only then may <code>O-Remove</code> drop the entry, guarded by premises that the fiber is retired, <em>Inactive</em>, provisioning nothing, and parent to no one. Dropping an <em>Active</em> fiber outright would discard its accumulator and leak exactly what the accumulator exists to reclaim.</p>
+  <p><strong>Removal takes several steps.</strong> <code>O-Retire</code> raises a flag. <code>L-Leave</code> and <code>L-Unload</code> take the fiber down to <em>Inactive</em>. Only then may <code>O-Remove</code> drop it. Dropping an <em>Active</em> fiber outright would throw away its undo stack and leak everything on it.</p>
 
-  <h3>The guard, and where the teardown order comes from</h3>
-  <p><code>L-Unload</code> carries a premise of its own — <code>¬relied</code>: no other installed fiber may currently resolve one of its declared keys to this one. A provider that has decided to leave therefore sits in <em>Unloading</em>, already out of service and provisioning nothing, until every consumer has gone.</p>
-
-  <p>That single premise produces the order <a href="#sandbox">the sandbox in 02</a> shows without anyone scripting it: removing <code>database</code> takes <code>commands</code> and <code>auth</code> down first, and only then may <code>database</code> unwind. The test is against committed views rather than declarations, so a consumer that has already unloaded stops counting — the guard releases itself, with no reference count kept anywhere.</p>
-
-  <pre><span class="c-key">const</span> fiber = ctx.<span class="c-fn">use</span>(auth, { secret })
+  <details class="deep">
+    <summary>Going deeper: the exact conditions</summary>
+    <p><code>L-Divert</code> has two forms. One lands the iteration in flight and keeps its inverse, the other aborts it. Routing through <em>Unloading</em> rather than <em>Active</em> is what stops a fiber from provisioning its coeffects for the length of one more step.</p>
+    <p><code>O-</code> rules are actions the orchestrator <em>may</em> take: their premises say when the action is legal, not when it happens.</p>
+    <p>Insertion and retirement are the orchestrator's only inputs; it never sets a lifecycle state directly. <code>O-Remove</code> is guarded by premises that the fiber is retired, <em>Inactive</em>, provisioning nothing, and parent to no one.</p>
+    <p><code>L-Unload</code> carries a premise of its own — <code>¬relied</code>: no other installed fiber may currently resolve one of its declared keys to this one. A provider that has decided to leave therefore sits in <em>Unloading</em>, already out of service and provisioning nothing, until every consumer has gone. That single premise produces the teardown order in <a href="#sandbox">section 03</a>. The test is against committed views rather than declarations, so a consumer that has already unloaded stops counting — the guard releases itself, with no reference count kept anywhere.</p>
+    <pre><span class="c-key">const</span> fiber = ctx.<span class="c-fn">use</span>(auth, { secret })
 
 <span class="c-com">// fiber.dispose *is* the accumulator; awaiting it recovers the context</span>
 <span class="c-key">await</span> fiber.<span class="c-fn">dispose</span>()</pre>
-
-  <p>Reconfiguration is not a method on the fiber. The declarative loader owns it: the orchestrator edits a configuration record, and the loader reconciles the difference into fiber operations — for a changed config, a <code>dispose</code> and a fresh <code>ctx.use</code>, leaving every untouched entry running. That is the sense in which a config change is reconciliation rather than a process restart.</p>
+    <p>Reconfiguration is not a method on the fiber. The declarative loader owns it: the orchestrator edits a configuration record, and the loader reconciles the difference into fiber operations — for a changed config, a <code>dispose</code> and a fresh <code>ctx.use</code>, leaving every untouched entry running.</p>
+  </details>
 </section>
 
 <section id="guarantees">
   <div class="sec-head"><span class="sec-num">05</span>
-    <div><h2>What you get in return</h2>
-      <p class="muted" style="margin:6px 0 0">The two properties the machinery exists to prove.</p></div>
+    <div><h2>What the runtime guarantees</h2>
+      <p class="muted" style="margin:6px 0 0">Two properties. The machinery exists to prove them.</p></div>
   </div>
 
-  <h3>Recovery exactness</h3>
-  <p>Removing a component restores the context to a state <em>observationally equivalent</em> to the one before it was added — even if other, independent fibers applied their own effects in the meantime, which is why the statement compares against those effects replayed rather than against a frozen snapshot. Observational, not bit-identical: what matters is that no available operation can tell the two apart. Without that weakening the theorem would be false for any real system with caches and counters.</p>
+  <h3>1. Removal undoes the component exactly</h3>
+  <p>Remove a component, and the context returns to where it would be had the component never been added. This holds even when other components changed the context in the meantime.</p>
 
   <figure class="tl">
     <svg viewBox="0 0 620 250" role="img" aria-label="A timeline of two interleaved fibers. auth applies two effects, building an inverse for each; metrics moves the state twice in between; then auth's inverses run in reverse order, each meeting a state metrics has changed.">
@@ -578,8 +630,8 @@
 
       <line class="tl-edge" x1="72"  y1="100" x2="72"  y2="212"/>
       <line class="tl-edge" x1="558" y1="100" x2="558" y2="212"/>
-      <text class="tl-lbl" x="72"  y="228" text-anchor="middle">episode opens</text>
-      <text class="tl-lbl" x="558" y="228" text-anchor="middle">episode closes</text>
+      <text class="tl-lbl" x="72"  y="228" text-anchor="middle">auth added</text>
+      <text class="tl-lbl" x="558" y="228" text-anchor="middle">auth removed</text>
 
       <line class="tl-lane" x1="64" y1="112" x2="566" y2="112"/>
       <line class="tl-lane" x1="64" y1="172" x2="566" y2="172"/>
@@ -600,21 +652,15 @@
       <text class="tl-ev dim" x="262" y="194" text-anchor="middle">count++</text>
       <text class="tl-ev dim" x="374" y="194" text-anchor="middle">count++</text>
     </svg>
-    <figcaption>Each inverse runs at a state the other fiber has moved. <span class="mono">g₂</span> comes off before <span class="mono">g₁</span> — the arcs nest, which is the stack seen sideways.</figcaption>
+    <figcaption>Each inverse of <span class="mono">auth</span> runs at a state that <span class="mono">metrics</span> has moved. <span class="mono">g₂</span> runs before <span class="mono">g₁</span>: the arcs nest, which is the stack seen from the side. The <span class="mono">count++</span> changes stay.</figcaption>
   </figure>
 
-  <p>The weakening is also the limit. Each binding is restored only up to what its own key's operations can observe, so — in the paper's examples — a monotone allocator is not rewound, a heap's layout does not come back from a <code>free</code>, and a message already sent stays sent. A location the system reifies at no key is outside the calculus altogether.</p>
+  <p>"Returns" means <em>observationally equivalent</em>, not bit-identical: no available operation can tell the two states apart. Without that weakening, the theorem would be false for any real system with caches and counters.</p>
 
-  <h3>Confluence</h3>
-  <p id="conf-lead">Once the system is <em>quiescent</em> — every fiber settled at its target view, no transition in flight — the state it comes to rest at is the state the same insertions and retirements would have produced had each surviving component been loaded once, in dependency order, and none ever unloaded. The dynamic history leaves no trace, and the normal form it converges on is the statically assembled system. That is what makes a dynamic system as predictable as a static one.</p>
+  <h3>2. The history leaves no trace</h3>
+  <p>Install and remove components in any order. When everything settles, the system is the same as if each surviving component had been loaded once, in dependency order. A dynamic system becomes as predictable as a static one. The paper calls this <strong>confluence</strong>.</p>
 
-  <p>Two caveats the demo below cannot show. The theorem is about the lifecycle rules alone, holding the orchestration steps fixed — different inputs land in different places for no interesting reason — and it carries a second hypothesis, that every component is total on its provision. What makes the two runs below agree despite different <em>insertion</em> orders is a separate and simpler fact: the set of fibers that ends up Active is determined by which components are present and unretired and by the dependency graph, not by the schedule.</p>
-
-  <p>Below, both runtimes assemble the same three components — <code>db</code> provides storage,
-  <code>auth</code> injects it, <code>api</code> injects both — over different histories. The right-hand
-  figure in each row is the set of fibers that is <em>Active</em> after that step, computed by the same
-  resolver, not scripted. Watch that column: partway through, the two runtimes disagree completely —
-  one has nothing up while the other is fully assembled — and the last rows match.</p>
+  <p>Below, two runtimes assemble the same three components over different histories: <code>db</code>, <code>auth</code> that needs <code>db</code>, and <code>api</code> that needs both. The right column of each row is the set of <em>Active</em> fibers after that step. The same resolver computes it; nothing is scripted. Midway the runtimes disagree completely. The last rows match.</p>
 
   <div class="demo" id="demoD">
     <div class="panes">
@@ -634,37 +680,39 @@
     </div>
     <div class="verdict" id="d-verdict" role="status" hidden></div>
   </div>
+
+  <details class="deep">
+    <summary>Going deeper: the exact statements and their hypotheses</summary>
+    <p id="conf-lead">Once the system is <em>quiescent</em> — every fiber settled at its target view, no transition in flight — the state it comes to rest at is the state the same insertions and retirements would have produced had each surviving component been loaded once, in dependency order, and none ever unloaded.</p>
+    <p>The theorem is about the lifecycle rules alone, holding the orchestration steps fixed — different inputs land in different places for no interesting reason — and it carries a second hypothesis, that every component is total on its provision. What makes the two runs above agree despite different <em>insertion</em> orders is a separate and simpler fact: the set of fibers that ends up Active is determined by which components are present and unretired and by the dependency graph, not by the schedule.</p>
+    <p>Recovery exactness compares against the other fibers' effects replayed rather than against a frozen snapshot. Each binding is restored only up to what its own key's operations can observe, so — in the paper's examples — a monotone allocator is not rewound, a heap's layout does not come back from a <code>free</code>, and a message already sent stays sent. A location the system reifies at no key is outside the calculus altogether.</p>
+  </details>
 </section>
 
 <section id="practice">
   <div class="sec-head"><span class="sec-num">06</span>
-    <div><h2>Why a TypeScript developer should care</h2>
-      <p class="muted" style="margin:6px 0 0">Where the absence of this discipline actually costs you.</p></div>
+    <div><h2>Why it matters: a harness that rewrites itself</h2>
+      <p class="muted" style="margin:6px 0 0">The case the paper looks ahead to, and where the usual workaround fails.</p></div>
   </div>
 
-  <h3>Self-modifying agent harnesses</h3>
-  <p>A harness is the runtime around a model: it composes tool suites and execution environments, governs permissions and sandboxing, keeps session state, manages context and memory, and orchestrates subagents. The paper's forward-looking case is a harness that generates and deploys modifications to <em>its own</em> components while it is still serving requests — model-synthesised reusable tools being the narrow precursor already in use. Every one of those modifications is an instance of dynamic composition.</p>
+  <p>A <strong>harness</strong> is the runtime around a model. It composes tools, manages permissions, session state and memory, and runs subagents. The paper's forward-looking case is a harness that changes <em>its own</em> components while it serves requests. Tools that a model writes for itself are an early form of this.</p>
 
-  <p>Because they land continuously and with little or no human oversight, the usual fallback stops being viable. Without temporal composability each self-modification is a full process restart that discards everything process-local: caches, open connections, partial computations. Rebuilding that takes seconds to minutes. At self-modification frequency the unavailability accumulates, in-flight tasks are disrupted over and over, and — the failure mode worth sitting with — <strong>a faulty self-modification can disable the very process you would need in order to recover from it</strong>.</p>
-
-  <p>Without spatial composability the failure is quieter and arrives later. Every module has to notice for itself when a dependency appears, disappears or changes identity, and can only do so by ad hoc means. A naive code-replacement strategy breaks dependents silently, or introduces a circular dependency that surfaces at reload time rather than at the moment the change was made.</p>
-
-  <h3>Why restarting the process is not the answer</h3>
-  <p>Operating systems already provide temporal composability — at the granularity of a process. Container orchestrators already provide spatial composability — at the granularity of a service. That substitute is a large part of why the problem has attracted so little formal attention: most software simply tolerates the gap.</p>
-
-  <p>It is not free. A restart discards accumulated state and takes seconds to minutes to rebuild, so staying available across one means running redundant replicas — paying in hardware for the inability to recover a single component. Container-level orchestration cannot express a dependency between two components sharing an address space, and pushes onto the network what could have been a local function call. Both mechanisms sit at the process and container boundary, while the systems built on them compose at a far finer grain. That mismatch is the gap this paradigm aims at.</p>
-
-  <h3>The everyday cases</h3>
+  <p>Such changes arrive often and with little human oversight. Without this discipline, each one costs a full process restart:</p>
   <ul class="plain">
-    <li><strong>Plugin systems.</strong> <a href="https://github.com/cordiverse">Cordis</a> is the meta-framework behind <a href="https://koishi.chat/en-US/">Koishi</a> and its 4000-plus community plugins: install, uninstall and reconfigure live, without restarting the process.</li>
-    <li><strong>Hot reload that actually cleans up.</strong> Ordinary HMR swaps the module and leaves the old listeners and registry entries behind. Effect tracking does that bookkeeping for the plugin author.</li>
-    <li><strong>A pattern you can steal without the framework.</strong> Make every effect return its inverse, keep them on a stack, unwind in reverse. That is the entire temporal mechanism.</li>
+    <li><strong>The restart throws away process state:</strong> caches, open connections, work in progress. Rebuilding it takes seconds to minutes.</li>
+    <li><strong>In-flight tasks break over and over.</strong> To stay available, you pay for redundant replicas.</li>
+    <li><strong>A faulty change can disable the very process you need to recover from it.</strong></li>
   </ul>
 
-  <h3>All of it, on one bench</h3>
-  <p>A harness that holds a session cache and serves requests, with a tool suite it can redeploy underneath itself. Deploy a new build and watch what does <em>not</em> happen: <code>memory</code> never moves, so the cache survives, and <code>chat</code> goes down and comes back because its coeffect was withdrawn and restored — nobody wrote that order. Then deploy a build that throws halfway through activating. Then deploy a build whose second effect raises: the paper's failure extension routes it out through an aborting <code>L-Divert</code> — the iteration choosing the abort rather than the environment — so it lands back at Inactive having installed nothing, with the error written on the fiber as an outcome that stops it being retried. Then press the last button and see what the coarse-grained workaround costs for the same change.</p>
+  <p>Without the dependency half, the failure is quieter. Each module must notice by itself when a dependency appears, disappears or changes. Naive code replacement breaks dependents silently, or adds a circular dependency that shows up only at reload time.</p>
 
-  <p class="muted">Each sequence is slowed so the rules are readable, so the seconds are theatre; the two columns that mean something are the session cache and the restart count. In the paper's terms, rebuilding process-local state after a restart takes seconds to minutes, and staying available across it is what forces you into redundant replicas.</p>
+  <h3>All of it, on one bench</h3>
+  <p>This harness holds a session cache and serves requests. It can redeploy its tool suite underneath itself. Try the buttons in order:</p>
+  <ol class="plain">
+    <li><strong>Deploy a new tool build.</strong> <code>memory</code> never moves, so the cache survives. <code>chat</code> stops and starts again because <code>tools</code> went away and came back.</li>
+    <li><strong>Deploy one that throws.</strong> Its second change raises an error. The runtime undoes the first change, keeps the error on the fiber and does not retry. The old build comes back.</li>
+    <li><strong>Restart the process instead.</strong> This is the coarse workaround. Watch the cache.</li>
+  </ol>
 
   <div class="demo" id="demoE">
     <div class="sandbox">
@@ -677,25 +725,63 @@
           <h4>Meanwhile, it is serving</h4>
           <ul class="rows" id="e-metrics"></ul>
         </div>
-        <small style="margin-top:12px">A redeploy leaves the cache where it was; a restart takes it
-        to nothing and it climbs back from cold. That gap, not the seconds, is the argument.</small>
+        <small style="margin-top:12px">Watch the session cache and the restart count. The seconds are slowed down so you can read the steps.</small>
       </div>
     </div>
     <div class="controls">
-      <button id="e-deploy">Deploy a new tool build</button>
-      <button id="e-faulty">Deploy one that throws</button>
-      <button id="e-restart" class="ghost">Restart the process instead</button>
+      <button id="e-deploy">1 · Deploy a new tool build</button>
+      <button id="e-faulty">2 · Deploy one that throws</button>
+      <button id="e-restart" class="ghost">3 · Restart the process instead</button>
       <button id="e-reset" class="ghost">reset</button>
     </div>
+    <h4 class="log-head">What happened, in order</h4>
     <ul class="log" id="e-log" aria-live="polite" aria-atomic="false"></ul>
   </div>
 
-  <h3>Where the discipline stops</h3>
-  <p>An effect is revertible only where the system can modify a location exclusively <em>and</em> restore what was there before. Outside that line an operation is untracked and acts as the identity — a direct <code>process.on</code>, a mutation of somebody else's object. The paper's point is that the line is drawn per location rather than per medium, and that a coeffect can move it: reifying an external location confines access to a set of operations that can each supply an inverse, and what acted as the identity becomes tracked. A scratch file under a private path is inside; the same path shared with another program is outside.</p>
+  <h3>Why not just restart?</h3>
+  <p>Operating systems already give you clean removal, but per process. Container orchestrators already handle dependencies, but per service. Both work at a coarse grain, while the code inside composes at a fine grain. A container cannot express a dependency between two parts of one process. It pushes onto the network what could be a local function call. That gap is what this paradigm aims at.</p>
 
-  <p>What crosses irreversibly is emission, not acquisition. <code>open</code> installs a descriptor that <code>close</code> removes and <code>malloc</code> reserves a block that <code>free</code> releases — those records live inside the boundary and are ordinary revertible effects. The bytes a <code>write</code> pushes through the descriptor are gone. Recovering from those means withholding the emission until the state is certain, or compensating for it — deleting the file, refunding the charge — and compensations compose in the same LIFO order as inverses, though the metatheory has to be re-proved against the coarser equivalence they satisfy.</p>
+  <h3>The everyday cases</h3>
+  <ul class="plain">
+    <li><strong>Plugin systems.</strong> <a href="https://github.com/cordiverse">Cordis</a> runs <a href="https://koishi.chat/en-US/">Koishi</a> and its 4000-plus community plugins. You install, remove and reconfigure them live, without a restart.</li>
+    <li><strong>Hot reload that cleans up.</strong> Ordinary HMR swaps the module and leaves the old listeners and registry entries behind. Effect tracking does that bookkeeping for you.</li>
+    <li><strong>A pattern you can use without the framework.</strong> Make every effect return its inverse. Keep the inverses on a stack. Unwind in reverse.</li>
+  </ul>
+</section>
 
-  <p>On hostile code the paper is more specific than "no defence". Declared <code>inject</code> plus context interception already amount to capability-style access control over proxy-mediated dependencies: an undeclared access throws, the full set of requests is known before the component runs, and an orchestrator can attenuate any component's access without touching the provider. But language-level checks are moot against code that can reach the host runtime directly, so genuinely untrusted components need an execution boundary beyond the language — a sandboxed process, a separate runtime, a container — with the bridge showing up on the host side as an ordinary fiber whose capabilities can be attenuated the same way.</p>
+<section id="limits">
+  <div class="sec-head"><span class="sec-num">07</span>
+    <div><h2>Where it stops</h2>
+      <p class="muted" style="margin:6px 0 0">Not every change can be undone.</p></div>
+  </div>
+
+  <p><strong>The runtime can undo only what it owns.</strong> An effect is revertible only where the system can change a location exclusively <em>and</em> restore what was there before. A direct <code>process.on</code> or a change to somebody else's object is outside that line. The runtime does not track it.</p>
+
+  <p><strong>The line is per location, not per medium.</strong> A scratch file under a private path is inside. The same path shared with another program is outside. A coeffect can move the line: if every access goes through operations that supply an inverse, the location becomes tracked.</p>
+
+  <p><strong>What leaves the system stays gone.</strong> <code>open</code> and <code>close</code>, <code>malloc</code> and <code>free</code> are ordinary revertible effects. The bytes a <code>write</code> sends are not. For those, you hold the output back until the state is certain, or you compensate: delete the file, refund the charge. Compensations unwind in the same reverse order as inverses. The paper notes that the proofs must then be redone against a coarser equivalence.</p>
+
+  <p><strong>Hostile code needs a real boundary.</strong> Declared <code>inject</code> plus context interception already give capability-style access control: an undeclared access throws, and the full set of requests is known before the component runs. An orchestrator can narrow any component's access without touching the provider. But code that reaches the host runtime directly ignores language-level checks. Untrusted components need a sandboxed process, a separate runtime or a container. The bridge to it appears on the host side as an ordinary fiber with the same narrowed capabilities.</p>
+</section>
+
+<section id="glossary">
+  <div class="sec-head"><span class="sec-num">&nbsp;&nbsp;</span>
+    <div><h2>Glossary</h2></div>
+  </div>
+  <dl class="gloss">
+    <dt id="g-component">component</dt><dd>A plugin: code with an <code>apply(ctx)</code> function, plus what it needs (<code>inject</code>) and what it provides.</dd>
+    <dt id="g-fiber">fiber</dt><dd>The running instance of a component: its dependencies, its provisions, its own context and undo stack.</dd>
+    <dt id="g-context">context (<code>ctx</code>)</dt><dd>The one object through which a component changes anything and gets anything. The runtime sees every change because of it.</dd>
+    <dt id="g-effect">effect, inverse</dt><dd>A change a component makes, and the function that undoes it. Revertible effects always come in pairs.</dd>
+    <dt id="g-coeffect">coeffect</dt><dd>What a component needs from its environment, such as a <code>db</code> service. The dual of an effect.</dd>
+    <dt>Σ (sigma)</dt><dd>The service table: which services are provided now, and by whom.</dd>
+    <dt>φ (phi)</dt><dd>The undo stack: the inverses of every effect applied so far, newest on top.</dd>
+    <dt>γ (gamma)</dt><dd>The current state of the context.</dd>
+    <dt id="g-orchestrator">orchestrator</dt><dd>Whoever decides which components exist: a person, a config loader, or the harness itself. It can only insert and retire.</dd>
+    <dt><code>O-</code> / <code>L-</code> rules</dt><dd>Steps of the calculus. <code>O-</code> rules are what the orchestrator may do. <code>L-</code> rules are what the runtime does by itself.</dd>
+    <dt>quiescent</dt><dd>Settled: every fiber is in its target state and no transition is in flight.</dd>
+    <dt>observationally equivalent</dt><dd>Two states that no available operation can tell apart, even if their bytes differ.</dd>
+  </dl>
 </section>
 </main>
 
@@ -724,18 +810,30 @@
     node.innerHTML = '';
     var d = document.createElement('div'); d.className='empty'; d.textContent=text; node.appendChild(d);
   }
-  function logTo(node, rule, text, keep){
+  /* The log reads top to bottom, oldest first, like a story. Each click opens a group
+     (logAct); the steps under it say what happened in plain words, and the rule of the
+     calculus that did it sits on the right as a tag. Old groups scroll away, whole. */
+  function trimLog(node, keep){
+    while (node.children.length > (keep || 40)) {
+      node.removeChild(node.firstChild);
+      while (node.firstChild && !node.firstChild.classList.contains('act')) node.removeChild(node.firstChild);
+    }
+    node.scrollTop = node.scrollHeight;
+  }
+  function logAct(node, text){
+    var n = document.createElement('li'); n.className = 'act';
+    n.textContent = text;
+    node.appendChild(n); trimLog(node);
+  }
+  function logTo(node, rule, text, aside){
     var n = document.createElement('li');
-    var b = document.createElement('b');
-    b.className = /^[OL]-/.test(rule) ? 'rule' : 'note';   // a rule of the calculus, or a remark
-    b.textContent = rule;
-    n.appendChild(b);
-    n.appendChild(document.createTextNode(' · ' + text));
-    node.insertBefore(n, node.firstChild);
-    while (node.children.length > (keep || 12)) node.removeChild(node.lastChild);
+    n.className = 'sub' + (aside ? ' aside' : '');
+    var a = document.createElement('span'); a.textContent = text; n.appendChild(a);
+    if (rule) { var b = document.createElement('span'); b.className = 'tag'; b.textContent = rule; n.appendChild(b); }
+    node.appendChild(n); trimLog(node);
   }
 
-  /* ============ 02 · runtime sandbox ============ */
+  /* ============ 03 · runtime sandbox ============ */
   var REG = [
     { id:'logger',   inject:[],            provides:null,   fx:["on('message', log)", "on('error', log)"] },
     { id:'database', inject:[],            provides:'db',   fx:["set('db', Database)", "effect(pool.connect)"] },
@@ -764,9 +862,13 @@
   }
   function badge(s){
     if (s==='active')  return ['s-active','Active'];
-    if (s==='pending') return ['s-pending','Pending'];
+    if (s==='pending') return ['s-pending','Waiting'];
     if (s==='unload')  return ['s-unload','Unloading'];
     return ['s-idle','Inactive'];
+  }
+  function metaText(p){
+    return 'needs ' + (p.inject.length ? p.inject.join(', ') : 'nothing') +
+      (p.provides ? '  ·  provides ' + p.provides : '') + '  ·  ' + p.fx.length + ' effects';
   }
   function buildFibers(){
     var host = el('s-fibers'); host.innerHTML = '';
@@ -776,13 +878,14 @@
       d.innerHTML =
         '<div class="top"><span class="nm">' + p.id + '</span>' +
         '<span class="badge s-idle" id="fb-' + p.id + '">Inactive</span></div>' +
-        '<div class="meta">inject ' + (p.inject.length ? '[' + p.inject.join(', ') + ']' : '[]') +
-        (p.provides ? '  ·  provide ' + p.provides : '') + '  ·  ' + p.fx.length + ' effects</div>' +
+        '<div class="meta"></div>' +
         '<div class="act"><button class="mini ghost" id="fa-' + p.id + '"></button></div>';
+      d.querySelector('.meta').textContent = metaText(p);
       host.appendChild(d);
       el('fa-' + p.id).addEventListener('click', function(){
         if (sBusy) return;
         installed[p.id] = !installed[p.id];
+        logAct(el('s-log'), 'You ' + (installed[p.id] ? 'installed ' : 'removed ') + p.id);
         reconcile(p.id);
       });
     });
@@ -792,7 +895,8 @@
       var s = (overrides && overrides[p.id]) || st[p.id];
       var b = el('fb-'+p.id), f = el('f-'+p.id), a = el('fa-'+p.id), t = badge(s);
       b.className = 'badge ' + t[0];
-      b.textContent = (s === 'pending') ? 'Pending: ' + missingFor(p, st).join(', ') : t[1];
+      b.textContent = (s === 'pending') ? 'Waiting for ' + missingFor(p, st).join(', ')
+                    : (s === 'inactive' && !installed[p.id]) ? 'Not installed' : t[1];
       f.className = 'fiber' + (s==='active' ? ' on' : s==='pending' ? ' wait' : s==='unload' ? ' gone' : '');
       a.textContent = installed[p.id] ? 'Remove' : 'Install';
       a.disabled = sBusy;
@@ -802,63 +906,68 @@
   function renderContext(st){
     var sv = el('s-services'), sk = el('s-stack');
     var provided = REG.filter(function(p){ return p.provides && st[p.id]==='active'; });
-    if (!provided.length) empty(sv, 'Σ = {}');
+    if (!provided.length) empty(sv, 'nothing provided');
     else {
       sv.innerHTML = '';
-      provided.forEach(function(p){ sv.appendChild(row(p.provides + ': ' + p.provides.toUpperCase(), 'fx', p.id)); });
+      provided.forEach(function(p){ sv.appendChild(row(p.provides, 'fx', 'from ' + p.id)); });
     }
-    if (!stack.length) empty(sk, 'φ = id');
+    if (!stack.length) empty(sk, 'empty: nothing to undo');
     else {
       sk.innerHTML = '';
       for (var i = stack.length - 1; i >= 0; i--) {
-        sk.appendChild(row('undo ' + stack[i].label, 'inv', stack[i].fiber));
+        var r = row('undo ' + stack[i].label, 'inv', stack[i].fiber);
+        r.setAttribute('data-fiber', stack[i].fiber);
+        sk.appendChild(r);
       }
     }
   }
   async function reconcile(changed){
     sBusy = true;
+    var log = el('s-log');
     var before = prevState, after = resolveAll();
     prevState = after;
 
     var losing = REG.filter(function(p){ return before[p.id]==='active' && after[p.id]!=='active'; }).reverse();
     var gaining = REG.filter(function(p){ return before[p.id]!=='active' && after[p.id]==='active'; });
 
-    if (losing.length) {
-      logTo(el('s-log'), 'O-Retire', changed + ': retirement flag raised — the lifecycle rules carry it out');
+    if (losing.length && changed) {
+      logTo(log, 'O-Retire', changed + ' is marked for removal; the runtime takes it from here');
     }
     for (var i = 0; i < losing.length; i++) {
       var p = losing[i], ov = {}; ov[p.id] = 'unload';
       paint(before, ov);
-      logTo(el('s-log'), 'L-Leave', p.id + ': ' +
-        (p.id === changed ? 'retired while Active' : 'a declared key lost its provider') +
-        ' — Active → Unloading');
-      await wait(420);
+      logTo(log, 'L-Leave', p.id + (p.id === changed || !changed
+        ? ' stops serving'
+        : ' stops: ' + (function(gone){ return gone.join(' and ') + (gone.length > 1 ? ' are' : ' is'); })(
+            p.inject.filter(function(k){ return missingFor(p, after).indexOf(k) >= 0; })) + ' gone'));
+      // show which undo entries are about to run, then run them
+      [].forEach.call(el('s-stack').querySelectorAll('[data-fiber="' + p.id + '"]'),
+        function(r){ r.classList.add('popping'); });
+      await wait(520);
       stack = stack.filter(function(e){ return e.fiber !== p.id; });
       renderContext(before);
-      logTo(el('s-log'), 'L-Unload', p.id + ': nothing relies on it now — accumulator ran, ' +
-        p.fx.length + ' inverses in reverse order, back to Inactive');
-      await wait(180);
+      logTo(log, 'L-Unload', p.id + ': its ' + p.fx.length + ' undo entries ran, newest first');
+      await wait(220);
     }
-    if (losing.length && !installed[changed]) {
-      logTo(el('s-log'), 'O-Remove', changed + ': retired, Inactive, provisioning nothing — entry dropped');
+    if (losing.length && changed && !installed[changed]) {
+      logTo(log, 'O-Remove', changed + ' is gone from the registry');
     }
 
-    if (gaining.length && installed[changed] && before[changed] !== 'active') {
-      logTo(el('s-log'), 'O-Insert', changed + ': registered — Inactive until its keys resolve');
+    if (gaining.length && changed && installed[changed] && before[changed] !== 'active') {
+      logTo(log, 'O-Insert', changed + ' is registered');
     }
     for (var j = 0; j < gaining.length; j++) {
       var q = gaining[j];
       q.fx.forEach(function(label){ stack.push({ fiber: q.id, label: label }); });
-      logTo(el('s-log'), 'L-Finish', q.id +
-        ': every declared key resolves — ' + q.fx.length + ' effects tracked');
+      logTo(log, 'L-Finish', q.id + ' starts' + (q.inject.length ? ' (it has ' + q.inject.join(', ') + ')' : '') +
+        ': ' + q.fx.length + ' effects, ' + q.fx.length + ' undo entries');
       paint(after);
       await wait(340);
     }
 
     REG.forEach(function(p){
       if (after[p.id]==='pending' && before[p.id]!=='pending') {
-        logTo(el('s-log'), 'no rule applies', p.id + ' is held at Inactive — L-Begin needs [' +
-          missingFor(p, after).join(', ') + ']');
+        logTo(log, '', p.id + ' waits: it needs ' + missingFor(p, after).join(' and '), true);
       }
     });
 
@@ -867,11 +976,13 @@
   }
   el('s-all').addEventListener('click', function(){
     if (sBusy) return;
+    logAct(el('s-log'), 'You installed everything');
     REG.forEach(function(p){ installed[p.id] = true; });
     reconcile(null);
   });
   el('s-none').addEventListener('click', function(){
     if (sBusy) return;
+    logAct(el('s-log'), 'You removed everything');
     REG.forEach(function(p){ installed[p.id] = false; });
     reconcile(null);
   });
@@ -882,9 +993,10 @@
     if (prevState[p.id]==='active') p.fx.forEach(function(l){ stack.push({ fiber:p.id, label:l }); });
   });
   paint(prevState);
-  logTo(el('s-log'), 'init', 'four fibers active, ' + stack.length + ' tracked effects');
+  logAct(el('s-log'), 'Start');
+  logTo(el('s-log'), '', 'four components run, ' + stack.length + ' undo entries on the stack', true);
 
-  /* ============ 03 · track / recover ============ */
+  /* ============ 02 · track / recover ============ */
   var STEPS = [
     { eff:"ctx.on('message', h)",  entry:"listeners.message = [h]", inv:"off('message', h)" },
     { eff:"ctx.set('db', new Db())", entry:"services.db = Db",      inv:"delete services.db" },
@@ -894,7 +1006,7 @@
   var aIdx = 0, aBusy = false;
   function aRender(){
     var st = el('a-state'), sk = el('a-stack');
-    if (aIdx === 0){ empty(st, 'γ = {}'); empty(sk, 'φ = id'); return; }
+    if (aIdx === 0){ empty(st, 'nothing changed yet'); empty(sk, 'empty: nothing to undo'); return; }
     st.innerHTML = ''; sk.innerHTML = '';
     for (var i = 0; i < aIdx; i++){
       st.appendChild(row(STEPS[i].entry, 'fx'));
@@ -922,27 +1034,27 @@
   el('a-track').addEventListener('click', function(){
     if (aBusy || aIdx >= STEPS.length) return;
     var s = STEPS[aIdx]; aIdx++; aRender();
-    el('a-hint').textContent = 'track(' + s.eff + ')  →  φ := φ ∘ [' + s.inv + ']';
+    el('a-hint').textContent = 'Ran ' + s.eff + '. Pushed its undo: ' + s.inv + '.';
     aBtns();
   });
   el('a-step').addEventListener('click', async function(){
     if (aBusy || aIdx === 0) return;
     aBusy = true; aBtns();
-    el('a-hint').textContent = 'popping the top of φ — the most recent effect goes first';
+    el('a-hint').textContent = 'Undoing the newest change first: ' + STEPS[aIdx-1].inv + '.';
     await aPop();
     aBusy = false; aBtns();
   });
   el('a-recover').addEventListener('click', async function(){
     if (aBusy || aIdx === 0) return;
     aBusy = true; aBtns();
-    el('a-hint').textContent = 'recover(γ, φ) = φ(γ)';
+    el('a-hint').textContent = 'recover: running every undo, newest first…';
     while (aIdx > 0) await aPop();
-    el('a-hint').textContent = 'γ is back to its pre-component state. φ = id.';
+    el('a-hint').textContent = 'Done. The state is back to where it started, and the stack is empty.';
     aBusy = false; aBtns();
   });
   el('a-reset').addEventListener('click', function(){
     aIdx = 0; aRender();
-    el('a-hint').textContent = 'Apply a few effects, then step back through them one at a time.';
+    el('a-hint').textContent = 'Apply a few changes, then undo them one at a time.';
     aBtns();
   });
   aRender(); aBtns();
@@ -977,41 +1089,43 @@
     cBusy = false; cBtns();
   }
   var ACTIVATE = [
-    { node:'reloading', edge:'begin',  rule:'L-Begin',  text:'every declared key resolves to an Active provider — the effect iterator starts' },
-    { node:'reloading', edge:'iter',   rule:'L-Iter',   text:'one iteration: a state change, its inverse, a continuation' },
-    { node:'active',    edge:'finish', rule:'L-Finish', text:'iterator exhausted, the accumulator holds every inverse' }
+    { node:'reloading', edge:'begin',  rule:'L-Begin',  text:'→ Reloading. Everything it needs is provided, so it starts.' },
+    { node:'reloading', edge:'iter',   rule:'L-Iter',   text:'One step: a change, its undo pushed, then the next step.' },
+    { node:'active',    edge:'finish', rule:'L-Finish', text:'→ Active. All steps done; the undo stack holds every inverse.' }
   ];
   function withInsert(seq){
     if (cState !== 'absent') return seq;
     return [{ node:'inactive', edge:'insert', rule:'O-Insert',
-              text:'orchestrator registers the fiber — it starts Inactive, not Loading' }].concat(seq);
+              text:'→ Inactive. The orchestrator registers it. It does not start yet.' }].concat(seq);
   }
-  el('c-load').addEventListener('click', function(){ cRun(withInsert(ACTIVATE)); });
+  el('c-load').addEventListener('click', function(){ logAct(el('c-log'), 'You inserted the component'); cRun(withInsert(ACTIVATE)); });
   el('c-divert').addEventListener('click', function(){
+    logAct(el('c-log'), 'You changed a dependency while it was starting');
     cRun(withInsert([
       ACTIVATE[0],
-      { node:'reloading', edge:'iter',   rule:'L-Iter',   text:'2 of 4 effects applied' },
-      { node:'unload',    edge:'divert', rule:'L-Divert', text:'a declared key changed provider — activation abandoned, not finished' },
-      { node:'inactive',  edge:'unload', rule:'L-Unload', text:'the accumulator runs: the 2 applied effects are unwound, fiber back to Inactive' }
+      { node:'reloading', edge:'iter',   rule:'L-Iter',   text:'2 of 4 changes made, 2 undo entries pushed.' },
+      { node:'unload',    edge:'divert', rule:'L-Divert', text:'→ Unloading. A service it needs changed provider. It stops before it finishes.' },
+      { node:'inactive',  edge:'unload', rule:'L-Unload', text:'→ Inactive. Its 2 undo entries run. Nothing it did is left.' }
     ]));
   });
   el('c-remove').addEventListener('click', function(){
+    logAct(el('c-log'), 'You retired the component');
     if (cState === 'active') {
       cRun([
-        { node:'active',   edge:null,     rule:'O-Retire', text:'a flag, nothing more — O-Retire applies at any state' },
-        { node:'unload',   edge:'leave',  rule:'L-Leave',  text:'retired while Active: the lifecycle rules take it down' },
-        { node:'inactive', edge:'unload', rule:'L-Unload', text:'φ(γ) — inverses in reverse order; γ ≃ the state before insertion' },
-        { node:'absent',   edge:'remove', rule:'O-Remove', text:'retired, Inactive, provisioning nothing, parent to no one — now it may be dropped' }
+        { node:'active',   edge:null,     rule:'O-Retire', text:'A retirement flag goes up. Nothing else happens yet.' },
+        { node:'unload',   edge:'leave',  rule:'L-Leave',  text:'→ Unloading. The runtime takes the retired fiber down.' },
+        { node:'inactive', edge:'unload', rule:'L-Unload', text:'→ Inactive. Its undo entries run, newest first. The state is as before insertion.' },
+        { node:'absent',   edge:'remove', rule:'O-Remove', text:'Gone. Retired, Inactive and providing nothing, so it may be dropped.' }
       ]);
     } else {
       cRun([
-        { node:'inactive', edge:null,     rule:'O-Retire', text:'a flag, nothing more' },
-        { node:'absent',   edge:'remove', rule:'O-Remove', text:'already Inactive with an empty table — dropped directly' }
+        { node:'inactive', edge:null,     rule:'O-Retire', text:'A retirement flag goes up.' },
+        { node:'absent',   edge:'remove', rule:'O-Remove', text:'Gone. It was already Inactive with nothing to undo.' }
       ]);
     }
   });
   cHot('absent', null);
-  logTo(el('c-log'), 'init', 'no fiber: the name is absent from the registry');
+  logAct(el('c-log'), 'Start'); logTo(el('c-log'), '', 'no fiber yet: the component is not in the registry', true);
   cBtns();
 
   /* ============ 05 · confluence ============ */
@@ -1163,11 +1277,10 @@
       var nm = document.createElement('span'); nm.className = 'nm';
       nm.textContent = p.id + (p.id === 'tools' ? ' v' + hVer : '');
       var bd = document.createElement('span'); bd.className = 'badge ' + t[0];
-      bd.textContent = (s === 'pending') ? 'Pending: ' + p.inject.join(', ') : t[1];
+      bd.textContent = (s === 'pending') ? 'Waiting for ' + p.inject.join(', ') : t[1];
       top.appendChild(nm); top.appendChild(bd);
       var meta = document.createElement('div'); meta.className = 'meta';
-      meta.textContent = 'inject [' + p.inject.join(', ') + ']' +
-        (p.provides ? '  \u00b7  provide ' + p.provides : '') + '  \u00b7  ' + p.fx.length + ' effects';
+      meta.textContent = metaText(p);
       d.appendChild(top); d.appendChild(meta); host.appendChild(d);
     });
     hMetrics();
@@ -1188,88 +1301,89 @@
   function hBtns(on){
     ['e-deploy','e-faulty','e-restart','e-reset'].forEach(function(id){ el(id).disabled = !on; });
   }
-  function hLog(rule, text){ logTo(el('e-log'), rule, text, 12); }
+  function hLog(rule, text){
+    var aside = (rule === 'note' || rule === 'process' || rule === 'init');
+    logTo(el('e-log'), aside ? '' : rule, text, aside);
+  }
 
   async function takeDown(reasonForTools){
     hServing = false;
-    hLog('O-Retire', 'tools v' + hVer + ': ' + reasonForTools);
+    hLog('O-Retire', 'tools v' + hVer + ' is retired: ' + reasonForTools);
     await wait(240);
-    hLog('L-Leave', 'tools v' + hVer + ': Active \u2192 Unloading \u2014 it stops providing toolset,'
-       + ' but its accumulator has not run yet');
+    hLog('L-Leave', 'tools v' + hVer + ' stops providing toolset');
     await wait(300);
     hOn.chat = false; hPaint();
-    hLog('L-Leave', 'chat: toolset resolves to nothing now \u2014 Active \u2192 Unloading');
+    hLog('L-Leave', 'chat stops: toolset is gone');
     await wait(300);
-    hLog('L-Unload', 'chat: 2 inverses \u2014 the request handler is detached');
+    hLog('L-Unload', 'chat: 2 undo entries run, the request handler is detached');
     await wait(240);
     hOn.tools = false; hPaint();
-    hLog('L-Unload', 'tools v' + hVer + ': guard clear, nothing relies on it now \u2014 3 inverses');
+    hLog('L-Unload', 'tools v' + hVer + ': nobody needs it now, 3 undo entries run');
     await wait(200);
   }
   async function bringUp(v){
     hVer = v; hOn.tools = true; hPaint();
-    hLog('O-Insert', 'tools v' + v + ': registered \u2014 Inactive until store resolves');
+    hLog('O-Insert', 'tools v' + v + ' is registered');
     await wait(240);
-    hLog('L-Finish', 'tools v' + v + ': 3 effects tracked');
+    hLog('L-Finish', 'tools v' + v + ' starts: 3 effects tracked');
     await wait(240);
     hOn.chat = true; hPaint();
-    hLog('L-Finish', 'chat: toolset resolves again \u2014 2 effects tracked');
+    hLog('L-Finish', 'chat starts again: toolset is back');
     hServing = true;
   }
 
   el('e-deploy').addEventListener('click', async function(){
     if (hBusy) return; hBusy = true; hBtns(false);
+    logAct(el('e-log'), 'You deployed tools v' + (hVer + 1));
     await takeDown('a new build is ready');
     await bringUp(hVer + 1);
-    hLog('note', 'memory never moved \u2014 the session cache is the one it had before');
+    hLog('note', 'memory never moved, so the session cache is the one it had before');
     hBusy = false; hBtns(true); hPaint();
   });
 
   el('e-faulty').addEventListener('click', async function(){
     if (hBusy) return; hBusy = true; hBtns(false);
     var good = hVer;
-    await takeDown('a new build is ready');
     var bad = good + 1;
+    logAct(el('e-log'), 'You deployed tools v' + bad + ', which throws');
+    await takeDown('a new build is ready');
     hVer = bad; hOn.tools = true; hPaint();
-    hLog('O-Insert', 'tools v' + bad + ': registered');
+    hLog('O-Insert', 'tools v' + bad + ' is registered');
     await wait(320);
-    hLog('L-Begin', 'tools v' + bad + ': effect iterator starts');
+    hLog('L-Begin', 'tools v' + bad + ' starts');
     await wait(320);
-    hLog('L-Iter', 'tools v' + bad + ': 1 of 3 applied');
+    hLog('L-Iter', 'tools v' + bad + ': change 1 of 3 made, undo pushed');
     await wait(380);
     hFailed = true; hOn.tools = false; hPaint();
-    hLog('L-Divert', 'tools v' + bad + ': effect 2 raised \u2014 the iteration chose the abort,'
-       + ' not the environment');
+    hLog('L-Divert', 'tools v' + bad + ': change 2 throws, so the start is aborted');
     await wait(420);
-    hLog('L-Unload', 'tools v' + bad + ': the 1 applied effect unwound \u2014 it installed nothing');
+    hLog('L-Unload', 'tools v' + bad + ': change 1 is undone, nothing is left installed');
     await wait(400);
-    hLog('note', 'the error is written on the fiber as an outcome, and it stays there: memory kept'
-       + ' running, and the failure never reached the parent');
+    hLog('note', 'the error stays on the fiber; memory kept running, and the failure never reached the parent');
     await wait(420);
-    hLog('note', 'L-Begin will not retry a failed fiber against an unchanged environment \u2014 a'
-       + ' retry has to be a revision');
+    hLog('note', 'the runtime will not retry the same build against the same environment; a retry must be a new revision');
     await wait(500);
     hFailed = false;
     await bringUp(good);
-    hLog('note', 'a reinserted fiber starts without an outcome \u2014 v' + good
-       + ' back, cache intact, no restart');
+    hLog('note', 'v' + good + ' is back, the cache is intact, no restart');
     hBusy = false; hBtns(true); hPaint();
   });
 
   el('e-restart').addEventListener('click', async function(){
     if (hBusy) return; hBusy = true; hBtns(false);
+    logAct(el('e-log'), 'You restarted the process');
     hServing = false;
     hOn.memory = hOn.tools = hOn.chat = false; hPaint();
-    hLog('outside the calculus', 'a restart is not a step this model has a rule for');
+    hLog('note', 'a restart is outside the calculus: no rule covers it');
     await wait(500);
-    hLog('process', 'exit \u2014 every fiber goes with it, tracked or not');
+    hLog('process', 'the process exits, and every fiber goes with it, tracked or not');
     M.cache = 0; hPaint();
     await wait(2200);
-    hLog('process', 'rebuilding: reconnecting, re-warming the cache\u2026');
+    hLog('process', 'rebuilding: reconnecting, warming the cache again…');
     await wait(3200);
     hOn.memory = hOn.tools = hOn.chat = true; hVer = hVer + 1;
     M.restarts += 1; hPaint();
-    hLog('process', 'up on v' + hVer + ' \u2014 cache cold, accumulated state discarded');
+    hLog('process', 'up on tools v' + hVer + ', but the cache is cold and the session state is lost');
     hServing = true;
     hBusy = false; hBtns(true); hPaint();
   });
@@ -1280,12 +1394,14 @@
     hVer = 1; hServing = true; hFailed = false;
     M = { served:0, cache:0, down:0, restarts:0, peak:0 };
     el('e-log').innerHTML = '';
-    hLog('init', 'harness up, three fibers active');
+    logAct(el('e-log'), 'Start');
+    hLog('init', 'the harness is up, three fibers run');
     hPaint();
   });
 
   hBuildMetrics();
-  hLog('init', 'harness up, three fibers active');
+  logAct(el('e-log'), 'Start');
+  hLog('init', 'the harness is up, three fibers run');
   hPaint();
 })();
 </script>

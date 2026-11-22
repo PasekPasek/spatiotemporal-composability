@@ -19,7 +19,7 @@ Key definitions used on this page:
 
 ## Page
 
-- [Spatiotemporal Composability, Explained Interactively](https://pasekpasek.github.io/spatiotemporal-composability/): the full explainer — two axes, a runtime sandbox, track/recover, the fiber lifecycle, and what the guarantees buy you.
+- [Spatiotemporal Composability, Explained Interactively](https://pasekpasek.github.io/spatiotemporal-composability/): the full explainer — the problem, track/recover, live dependencies, the fiber lifecycle, the guarantees, a self-modifying harness, the limits, and a glossary.
 - [Extended plain-text version](https://pasekpasek.github.io/spatiotemporal-composability/llms-full.txt): the same content without the interactive sandboxes, for direct ingestion.
 
 ## Source material
