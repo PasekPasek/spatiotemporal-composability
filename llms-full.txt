@@ -8,7 +8,12 @@ Reference implementation: Cordis (TypeScript), https://github.com/cordiverse
 You disable a plugin in your editor and it asks you to restart. Not because the code is still
 loaded, but because nobody knows what that plugin changed. This is a runtime that knows.
 
-## 1. Two orthogonal axes
+In two rules: every change a component makes returns its own undo, and the runtime keeps those
+undos on a stack; every component declares what it needs, and the runtime starts or stops it as
+those needs appear and disappear. With both, parts of a running program can be added, replaced and
+removed, and nothing leaks.
+
+## 1. The problem
 
 Time: removing a component has to undo everything it did. The mechanism is revertible effects —
 every transformation of the context carries its own inverse, and the runtime holds onto it.
@@ -22,26 +27,7 @@ dual notion, familiar from static analysis, lifted here into a runtime mechanism
 code has neither property: the author has to remember the inverse of every line, and in practice
 leaves behind a leaked listener, a zombie timer, a dead registry entry.
 
-## 2. The runtime
-
-Components declare `inject` (what they require) and `provide` (what they contribute to the shared
-service table). Removing a provider cascades through its dependents, deepest dependent first —
-nobody writes that teardown order; it falls out of dependency resolution. The inverse stack empties
-exactly as far as it filled: no entry survives its owner.
-
-    export const name = 'auth'
-    export const inject = ['db'] as const
-
-    export function apply(ctx: Context<{ db: Database }>) {
-      // ctx.db is non-null for the entire lifetime of this fiber:
-      // if db goes away, the fiber is torn down before it can observe undefined
-      ctx.set('auth', new Auth(ctx.db))
-    }
-
-This is what classical dependency injection does not do. A container injects once, at construction.
-Here the binding is live, it can be withdrawn, and withdrawal is handled as carefully as provision.
-
-## 3. Revertible effects: track and recover
+## 2. Every change returns its undo: track and recover
 
 An ordinary context Γ is lifted to a revertible one, ∂Γ = Γ × (Γ → Γ): the current state γ together
 with φ, the composition of the inverses of every effect applied so far.
@@ -144,7 +130,26 @@ completed one. It also unifies the effect context and the coeffect context into 
 and mediates every effect and coeffect through it — the discipline it calls the context paradigm, and
 the source of the observational equivalence up to which two components' effects interleave.
 
-## 4. Fiber lifecycle
+## 3. Dependencies that can disappear
+
+Components declare `inject` (what they require) and `provide` (what they contribute to the shared
+service table). Removing a provider cascades through its dependents, deepest dependent first —
+nobody writes that teardown order; it falls out of dependency resolution. The inverse stack empties
+exactly as far as it filled: no entry survives its owner.
+
+    export const name = 'auth'
+    export const inject = ['db'] as const
+
+    export function apply(ctx: Context<{ db: Database }>) {
+      // ctx.db is non-null for the entire lifetime of this fiber:
+      // if db goes away, the fiber is torn down before it can observe undefined
+      ctx.set('auth', new Auth(ctx.db))
+    }
+
+This is what classical dependency injection does not do. A container injects once, at construction.
+Here the binding is live, it can be withdrawn, and withdrawal is handled as carefully as provision.
+
+## 4. The lifecycle of one component
 
 A fiber is the runtime instance of a component — its dependencies, its provisions, and its effect
 iterator. The calculus is nine rules over four lifecycle states (Inactive, Reloading, Active,
@@ -193,7 +198,7 @@ Reconfiguration is not a method on the fiber: the declarative loader owns it. Th
 a configuration record and the loader reconciles the difference into fiber operations — for a changed
 config, a dispose and a fresh ctx.use, leaving untouched entries running.
 
-## 5. What the guarantees buy you
+## 5. What the runtime guarantees
 
 Recovery exactness: removing a component restores the context to a state observationally equivalent
 to the one before it was added, even if other independent fibers applied their own effects in the
@@ -212,7 +217,7 @@ a second hypothesis, that every component is total on its provision. That differ
 also land in the same place follows separately, from the set of Active fibers being determined by
 which components are present and unretired and by the dependency graph, not by the schedule.
 
-## 6. Why a TypeScript developer should care
+## 6. Why it matters: a harness that rewrites itself
 
 Self-modifying agent harnesses. A harness is the runtime around a model: it composes tool suites
 and execution environments, governs permissions and sandboxing, keeps session state, manages
@@ -255,7 +260,7 @@ entries behind. Effect tracking does that bookkeeping for the plugin author.
 A pattern you can steal without the framework. Make every effect return its inverse, keep them on a
 stack, unwind in reverse. That is the entire temporal mechanism.
 
-## 7. Failure, and what a restart costs
+### Failure, and what a restart costs
 
 The effects a component installs reach outside the context that tracks them, and a location may
 refuse: a port already bound, a file that is not there, a peer that does not answer. The paper's
@@ -274,7 +279,7 @@ serving requests, with a tool suite redeployed underneath it, a build that raise
 activating, and — for the same change — the coarse-grained alternative of restarting the process,
 which discards the cache and every other piece of process-local state.
 
-## Limitations
+## 7. Where it stops
 
 An effect is revertible only where the system can modify a location exclusively and restore what was
 there before. Outside that boundary an operation is untracked and acts as the identity — a direct
@@ -293,3 +298,18 @@ a container — with the bridge appearing on the host side as an ordinary fiber.
 
 This page is a teaching simplification; the formal content (effect iterators, observational
 equivalence, the metatheory of the calculus) is in the paper.
+
+## Glossary
+
+- component — a plugin: code with an apply(ctx) function, plus what it needs (inject) and what it provides.
+- fiber — the running instance of a component: its dependencies, its provisions, its own context and undo stack.
+- context (ctx) — the one object through which a component changes anything and gets anything.
+- effect, inverse — a change a component makes, and the function that undoes it.
+- coeffect — what a component needs from its environment, such as a db service; the dual of an effect.
+- Σ (sigma) — the service table: which services are provided now, and by whom.
+- φ (phi) — the undo stack: the inverses of every effect applied so far, newest on top.
+- γ (gamma) — the current state of the context.
+- orchestrator — whoever decides which components exist; it can only insert and retire.
+- O- / L- rules — O- rules are what the orchestrator may do; L- rules are what the runtime does by itself.
+- quiescent — every fiber is in its target state and no transition is in flight.
+- observationally equivalent — two states that no available operation can tell apart.
